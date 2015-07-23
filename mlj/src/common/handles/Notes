@@ -1,0 +1,46 @@
+Notes on Handles
+================
+
+1. Unknown fields
+-----------------
+
+It's important to be careful that fields and methods are consistently 
+flagged (by is_mutable and so on).  I suggest that the user should NOT be 
+permitted to reference MLJ-generated class names himself, or else be warned 
+that doing this may have undefined consequences.  This is because we always 
+assume that fields with different flags are different, and (for example)
+allow writes to them to be done in arbitrary order.
+
+2. Locks and Reording of Reads/Writes
+-------------------------------------
+
+Two classes of operations have a "synchronize" flag flag set:
+1) All monitorenter and monitorexit instructions
+2) Calls to methods which have the synchronize flag set.
+The effects of the synchronize flag on reordering are as follows:
+1) Synchronized operations do not commute with each other.
+2) Synchronized operations do not commute with any read or write operation
+   (IE getfield/putfield/getstatic/putstatic/aload/astore)
+3) Synchronized operations are always performed
+This, especially (2), is quite severe because it is hoped that measured by
+CPU time, synchronized operations are rare.  It is only necessary 
+when threads are involved.
+
+As a result, the current code for MethodHandlePriv makes unknown methods
+have synchronized flag unset by default.  This is unlike the other flags,
+where the unknown behaviour is the safe one.  So it's important to understand
+what leaving the synchronized flag false means, if you are writing the
+basic primitives which control concurrency.  I hope that will not affect many
+users!
+
+We could make the effects of the synchronize flag less severe by 
+1) separating the effects of unlocking and locking.
+2) adding an extra flag to fieldhandles and arrayhandles indicating that the
+   field in question was possibly shared data.  Reads and writes where
+   this flag was not set would be unaffected.
+But neither seems worth the extra trouble right now.
+
+
+
+
+

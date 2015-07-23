@@ -1,0 +1,134 @@
+(*......................................................................*)
+(* MLj - a Standard ML to Java bytecode compiler                        *)
+(* Copyright (C) 1999 Persimmon IT Inc.                                 *)
+(*                                                                      *)
+(* This program is free software; you can redistribute it and/or        *)
+(* modify it under the terms of the GNU General Public License          *)
+(* as published by the Free Software Foundation; either version 2       *)
+(* of the License, or (at your option) any later version.               *)
+(*                                                                      *)
+(* This program is distributed in the hope that it will be useful,      *)
+(* but WITHOUT ANY WARRANTY; without even the implied warranty of       *)
+(* MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the        *)
+(* GNU General Public License for more details.                         *)
+(*                                                                      *)
+(* You should have received a copy of the GNU General Public License    *)
+(* along with this program; if not, write to the Free Software          *)
+(* Foundation, Inc., 59 Temple Place - Suite 330, Boston,               *)
+(* MA 02111-1307, USA.                                                  *)
+(*......................................................................*)
+
+(* IntInfWordUtils:INT_INF_WORD_UTILS contains code for manipulating
+   words used for infinite precision integers.  It may be advantageous
+   to code some of these functions specially for particular architectures.
+
+   This is the version for MLJ using JDK1.0.2. 
+   *)
+structure IntInfWordUtils:>INT_INF_WORD_UTILS 
+   where type W.word=Word64.word =
+struct
+   structure W=Word64
+
+   val toJava=Java.fromWord64
+   val fromJava=Java.toWord64
+
+   infix lshift
+   infix rshift
+
+   fun op lshift (x,y)=fromJava(Prim.shl(toJava x,Java.fromWord y))
+   fun op rshift (x,y)=fromJava(Prim.ushr(toJava x,Java.fromWord y))
+
+   val lgBase = Word.fromInt(W.wordSize)
+   val lgHBase = Word.div(lgBase,0w2)
+   val hbase = 0w1  lshift  lgHBase
+   val hmask = W.-(hbase,0w1)
+
+   fun hl w=(w rshift lgHBase,W.andb(w,hmask))
+   fun sh w= w lshift lgHBase
+ 
+   open W
+
+   (* multiply 2 digits *)
+   fun mul2 (m, n) = 
+   let 
+      val (mh,ml) = hl m
+      val (nh,nl) = hl n
+      (* I avoid the SML/NJ trade off of one multiplication for several
+         additions because I can't see how to spot the carry.  However,
+         we probably don't lose much; multiplication is not very expensive
+         on most processors and in fact it is possible we gain.  If 
+         we want to optimise multiplication it would be better to
+         use the same trade off multiplications for additions with the
+         standard divide-and-conquer algorithm. *)
+      val x = mh*nh
+      val y1 = mh*nl
+      val y2 = ml*nh
+      val z = ml*nl
+      val (zh,zl) = hl z
+      val u'=y1+zh (* this cannot overflow *)
+      val u=u'+y2
+      val carry=(u<u')
+      val (uh,ul) = hl u
+      val low=sh ul+zl
+      val high'=x+uh
+      val high=if carry then high'+hbase else high'
+   in 
+      (high,low)
+   end
+
+   (* to avoid a superfluous multiplication we write this directly using
+      the Java bytecodes, the problem being that Java has no operations for
+      division and remaindering of unsigned quantities *)
+   fun lt(x,y)= Prim.lt(toJava x,toJava y)
+   fun le(x,y)= Prim.le(toJava x,toJava y)
+
+   fun jdiv(x,y)=fromJava(Prim.div(toJava x,toJava y))
+   fun jrem(x,y)=fromJava(Prim.rem(toJava x,toJava y))
+
+   fun divmodW(a,b)=  (* We assume the top bit of b is unset *)
+   if lt(a,0w0) then
+   let
+      val ashift=a rshift 0w1
+      val k=jrem(ashift,b)
+      val d=jdiv(ashift,b)
+      val r=(k lshift 0w1)+(W.andb(a,0w1))
+   in
+      if le(b,r) orelse lt(r,0w0)
+      then
+         (* adjust *)
+         ((d lshift 0w1)+0w1,r-b)
+      else
+         (d lshift 0w1,r)
+   end
+   else
+      (jdiv(a,b),jrem(a,b))
+
+
+   fun divmodW(i,j)=(W.div(i,j),W.mod(i,j))
+
+   (* divide DP number by digit; assumes u < i , i >= base/2 *)
+   fun divMod2 ((u,v), i) = 
+   let
+      val (vh,vl) = hl v
+      val (ih,il) = hl i
+      fun divmod32(u,vhalf)=
+      (* divmod32 produces the div and mod by i of
+         u|vhalf, where vhalf is half of one W.word and u<i. *)
+      let
+         val (guess_quot,r)=divmodW(u,ih)
+         (* bring down next digit and adjust if necessary. *)
+         val rup=sh r+vhalf
+         val guess_rem=rup-guess_quot*il
+      in
+         if guess_rem>rup
+         then
+            (guess_quot-0w1,guess_rem+i)
+         else
+            (guess_quot,guess_rem)
+      end
+      val (q1,rem1) = divmod32(u,vh)
+      val (q0,rem)  = divmod32(rem1,vl)
+      val q = sh q1 + q0
+   in (q,rem) 
+   end
+end

@@ -1,0 +1,36 @@
+#!/bin/sh
+
+if [ -z "$MLJBIN" ]; then
+  echo Set MLJBIN environment variable to binaries directory e.g. /mlj/bin
+  exit 1
+fi
+
+if [ -z "$CM_PATH" ]; then
+  echo Set CM_PATH environment variable to SML/NJ library directory e.g. /sml/lib
+  exit 1
+fi
+
+AO=`.arch-n-opsys`
+eval $AO
+
+RUN=$CM_PATH/../bin/.run/run.$HEAP_SUFFIX
+if [ ! -x "$RUN" ]; then
+  echo Cannot find SML/NJ runtime file $RUN
+  exit 1
+fi
+
+cp $RUN $MLJBIN
+
+  case $1 in
+    -java11*)
+      SMLFILE=src/build.sml
+      ;;
+    -java10*)
+      SMLFILE=src/build102.sml
+      ;;
+    *)
+      SMLFILE=src/build.sml
+      ;;
+  esac
+
+sml <$SMLFILE

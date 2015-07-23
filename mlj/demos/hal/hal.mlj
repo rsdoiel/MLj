@@ -1,0 +1,4 @@
+on microsoftbug
+sourcepath . ../conc
+export HalServer.HalServer HalServer, Schan.SchanReader SchanReader
+make

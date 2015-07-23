@@ -1,0 +1,3 @@
+sourcepath .
+make Main, Applet.TreeApplet
+

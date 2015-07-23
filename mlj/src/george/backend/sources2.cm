@@ -1,0 +1,259 @@
+(* This is the sources.cm file for the backend.
+   *)
+Library
+(* Here are the structures and signatures
+   which need to be accessed outside the
+   backend.  For each of these there should be
+   a short note here, a longer note attached to the file name later on
+   in this file, and full documentation in the signature file (if there
+   is one) or alternatively in the structure file.  structure XXXX
+   will be in a file XXXX.sml; signature YYYY will be in a file YYYY.sig.
+   Relying on details of representations not in the signature is dangerous
+   as I shall put :> things in as soon as New Jersey allows them. *)
+
+   structure Class (* Compiles and defines format of classes *)
+   signature CLASS
+
+   structure Field (* Defines format of fields *)
+   signature FIELD
+
+   structure Method (* Defines format of methods *)
+   signature METHOD
+
+   structure Code (* This contains the datatype for instruction formats *)
+
+   signature LABELS (* This contains the label functions *)
+   structure Labels
+
+   signature TRYCATCH (* This contains the exception functions *)
+   structure TryCatch
+
+   signature TESTS (* Data structure for comparison tests *)
+   structure Tests
+
+   structure CodeAttr (* CodeAttr defines format of
+                         code attributes (which are needed each time you
+                         need code for a method).  CodeAttr also contains
+                         two compilation flags for turning off checking
+                         and turning off minor optimisations. *)
+   signature CODEATTR
+   structure Exceptions (* used for throws clauses *)
+   signature EXCEPTIONS
+   structure ConstantValue (* used for constant values of fields *)
+   signature CONSTANTVALUE
+   structure Signature (* used for GJ *)
+   signature SIGNATURE
+   structure Deprecated (* indicates a field or method is deprecated *)
+   signature DEPRECATED
+
+   structure Decode
+   signature DECODE
+
+   structure Open
+   signature OPEN
+
+   structure Zip (* Needed for creating Zip files *)
+   signature ZIP
+
+   (* copied from ../../common/sources.cm *)
+   signature CLASSHANDLEPRIV
+   structure ClassHandlePriv
+   signature CLASSHANDLE
+   structure ClassHandle
+
+   signature FIELDHANDLEPRIV
+   structure FieldHandlePriv
+   signature FIELDHANDLE
+   structure FieldHandle
+
+   signature METHODHANDLEPRIV
+   structure MethodHandlePriv
+   signature METHODHANDLE
+   structure MethodHandle
+
+   signature ARRAYHANDLEPRIV
+   structure ArrayHandlePriv
+   signature ARRAYHANDLE
+   structure ArrayHandle
+
+   (* Constants *)
+   signature CONSTANTS
+   structure Constants
+
+   (* Types *)
+   signature TYPES
+   structure Types
+
+   (* Values *)
+   signature JAVAINT (* Java integers *)
+   structure JavaInt
+   signature JAVALONG (* Java longs *)
+   structure JavaLong 
+   signature JAVASTRING (* Java strings *)
+   structure JavaString
+   signature JAVAFLOAT (* Java floats (32 bit reals) *)
+   structure JavaFloat
+   signature JAVADOUBLE (* Java doubles (64 bit reals) *)
+   structure JavaDouble
+   structure IntConvFlags
+
+   signature DESCRIPTORS (* Used in printing debugging information *)
+   structure Descriptors
+
+   signature ATTRIBUTE (* Used for the attribute type *)
+   structure Attribute 
+is
+   smlnj-lib.cm (* SML/NJ extras *)
+
+   (* We now use AT&T's hash table functor *)
+   ../zip/sources.cm
+
+   (* Common stuff *)
+   ../../common/sources.cm
+
+   (* Sorting routines *)
+   ../sort/sources.cm
+
+   (* Class:CLASS contains the code which turns a class into a bytecode
+      vector.  It also contains the constructors for classes. *)
+   class/CLASS.sig
+   class/Class.sml
+
+   (* Field:FIELD contains the code which turns a field contained in a class
+      into a bytecode vector.  It also contains the constructors for
+      fields. *)
+   field/FIELD.sig
+   field/Field.sml
+
+   (* Method:METHOD contains the code which turns a method contained in a
+      class into a bytecode vector.  It also contains the constructors for
+      methods.  (The hard work of compiling instructions is actually
+      done by code/CompileCode.sml, via attributes/CodeAttr.sml ) *)
+   method/METHOD.sig
+   method/Method.sml
+
+   (* code contains stuff relating to the Java Instruction code itself.
+      It also contains the datatypes for constructing field/method
+      descriptors (in Descriptors.sml) and instruction lists (in Code.sml).
+      *)
+   code/Code.sml (* datatype of instructions *)
+   code/COMPILECODE.sig
+   code/CompileCode.sml (* code for compiling instruction code *)
+
+   code/COMPILEEXCEPTIONTABLE.sig
+   code/CompileExceptionTable.sml
+                 (* code for compiling the exception table *)
+   code/DESCRIPTORS.sig (* code/datatypes relating to method and field *)         
+   code/Descriptors.sml (* descriptors *)
+
+   code/LABELS.sig
+   code/Labels.sml (* Code for handling labels (that is, targets of branches) *)
+
+   code/TRYCATCH.sig
+   code/TryCatch.sml (* Data associated with a catch clause for an exception *)
+
+   code/TESTS.sig (* Datastructure for comparison tests *)
+   code/Tests.sml
+
+   (* attributes deals with the various attributes.  Three attributes can
+      currently be output by the backend: the "Code" attribute, the
+      "ConstantValue" attribute (for giving constant values to fields) and
+      the "Exceptions" attribute (for specifying what exceptions a method
+      can throw) *)
+
+   attributes/CODEATTR.sig (* the "Code" attribute *)
+   attributes/CodeAttr.sml
+   attributes/CONSTANTVALUE.sig (* the "ConstantValue" attribute *)
+   attributes/ConstantValue.sml
+   attributes/EXCEPTIONS.sig (* the "Exceptions" attribute *)
+   attributes/Exceptions.sml
+   attributes/SIGNATURE.sig (* the "Signature" attribute, used in GJ *)
+   attributes/Signature.sml 
+   attributes/DEPRECATED.sig (* the "Deprecated" attribute *)
+   attributes/Deprecated.sml
+
+
+   attributes/ATTRIBUTE.sig (* This contains general code for decoding attributes *)
+   attributes/Attribute.sml
+
+   (* A major part of the backend is concerned with constructing the
+      constant pool.  The remaining structures listed here deal with this,
+      but the only ones which are referenced from elsewhere in the
+      backend are pool/AllPools.sml (which deals with the pool)
+      and W8/*.
+      *)
+
+   (* Here we come to the constant pool.  We call the whole pool the
+      "collective pool"; the collective pool contains a sequence of
+      "single-type pools", each of which contains all the constants of
+      some type.  *)
+   pool/ALLPOOLS.sig (* functions for manipulating the collective pool *)
+   pool/AllPools.sml
+
+   pool/POOL.sig (* Pool is a functor for constructing single-type pools:POOL
+                    containing a POOL_ITEM:thing (which must have
+                    PACKABLE and SEARCHABLE structures; see later).
+                    Handles implements handles, which are handles to
+                    things in the constant pool
+                    (used for pointers in the constant pool to
+                    other items in the constant pool) and pairs of
+                    handles, plus PACKABLE and SEARCHABLE structures
+                    for handles and pairs of handles *)
+   pool/Pool.sml
+   pool/HANDLES.sig
+   pool/Handles.sml
+
+   pool/POOL_ITEM.sig
+
+   pool/PAIRPACKSEARCH.sig (* PairPackSearch is a functor which combines
+                              two packable and searchable items.  It is
+                              actually only used for pairs of handles. *)
+   pool/PairPackSearch.sml
+
+   pool/ConstClass.sml (* The ConstXXX structures are POOL_ITEM
+                          types for each CONSTANT_YYY pool entry
+                          in Java bytecode. *)
+   pool/ConstFref.sml (* CONSTANT_Fieldref *)
+   pool/ConstMref.sml (* CONSTANT_Methodref *)
+   pool/ConstIMref.sml (* CONSTANT_InterfaceMethodef *)
+   pool/ConstString.sml
+   pool/ConstInt.sml
+   pool/ConstFloat.sml
+   pool/ConstLong.sml
+   pool/ConstDouble.sml
+   pool/ConstNnT.sml (* CONSTANT_NameAndType *)
+   pool/ConstUtf8.sml
+
+   dict/PackKey.sml (* Functor taking a PACKABLE item (see pack/whatever)
+          and making it a HashKey.  This is used for
+          everything except handles to the constant pool,
+          which can't be done that way because their PACKABLE structure
+          (in pool/Handles.sml) doesn't work until the pool is resolved,
+          but they have to be hashed earlier. *)
+   dict/Word8Key.sml (* SEARCHABLE Word8Vector's.  These are only
+                           used by PackSearch *)
+
+   dict/HASHABLEREFS.sig (* These provide hashable reference cells *)
+   dict/HashableRefs.sml
+
+(* W8 contains some miscellaneous byte operations *)
+   W8/W8.sig (* structure for concatenating byte vectors *)
+   W8/W8.sml
+
+(* undo contains general code for decoding class files (the code
+   for decoding particular structures is usually in the same place as the
+   code the encodes them).
+   *)
+   undo/DECODE.sig (* The main structure *)
+   undo/Decode.sml
+
+   undo/READPOOL.sig (* Code for reading the constant pool *)
+   undo/ReadPool.sml
+
+   undo/OPEN.sig (* Code for opening instreams from files and vectors *)
+   undo/Open2.sml
+
+
+
+
+

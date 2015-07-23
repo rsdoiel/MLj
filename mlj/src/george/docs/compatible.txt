@@ -1,0 +1,152 @@
+[ last revised 18th March 1997 ]
+
+I want to list formally the rules I plan to use to verify that
+getfield/putfield, getstatic/putstatic, and aload/astore are referring
+to different things.  Nick, I'd be grateful if you could read through
+these sometime and verify them, since I do not yet feel sufficiently
+confident in my own judgement, and an error would introduce subtle
+aliasing bugs later.
+
+Background.  Andrew is (please, Andrew) going to provide a structure
+containing a class
+handle.  This will match something like the following signature:
+
+sig
+   type Handle
+   val equal : Handle * Handle -> bool
+   val name : Handle -> JavaString.t
+   val superclass : Handle -> Handle option
+   val is_interface: Handle -> bool option
+   val object: Handle (* java/lang/Object *)
+   val string: Handle (* java/lang/String *)
+   val cloneable: Handle (* java/lang/Cloneable *)
+   (* values of type Handle may also be declared for other
+      Java library classes *)
+end
+
+This will be used for all class references passed down to the basic
+block code.  The semantics of these functions should be fairly clear
+except for superclass(H), which always returns either a handle to the direct
+superclass of H, or NONE if we don't know a direct superclass to H (this
+is certainly true of object, and may also be true of Java library classes).
+The is_interface function determines if the class is an interface, or NONE
+if this is not known.  The superclass function MUST obey the following
+invariant: for all classes
+X and Y with handles which are accessible by the basic block code, such that
+X is a subclass of Y, then if superclass(Y) isn't NONE, superclass(X) isn't
+NONE.
+
+Thus I can test for "X might be a subclass of Y" by something of the form:
+
+local
+   open ClassHandle
+in
+   fun maybe_subclass(X,Y)=
+      (case superclass Y of
+         NONE=>true
+      |  SOME _ =>
+         let
+            fun is_subclass Z =
+               if equal(Z,Y)
+               then true
+               else
+                  (case superclass Z of
+                     NONE=>false
+                  |  SOME new_Z=>is_subclass new_Z
+                  )
+         in
+            is_subclass X
+         end
+      )
+end
+
+
+I can compute a class handle, possibly modified by an array dimension,
+for each value which can
+be a class, without difficulty (it's supplied for arguments to basic
+blocks; for news the class handle will be that supplied with the new;
+for getfields it will come from the descriptor, and so on).
+
+For all types of load/store, we assume that loads and stores are to different
+locations if the supplied access flags (whether they are MUTABLE and/or
+MUSTDO) are identical.  It is the job of the user of the basic block
+code to ensure this.  For more information on this, see depend.txt.
+
+For getfields and putfields, we are told to use field with
+name + descriptor F, class C, from an object with class handle O.
+C cannot be an interface (interfaces only have static fields), nor can
+it be Object, and so O cannot be an interface either.
+I shall assume getfields/putfields on (F,C,O) refer to a different item
+from ones on (F',C',O') if either F <> F' or (not(maybe_subclass(O,O'))
+andalso not(maybe_subclass(O',O))) or if the access flags for the operations
+are identical.  The argument
+for this is that if the object in question is the same, O and O' must both
+refer to superclasses of its class, and therefore one must be a superclass
+of the other.
+
+For getstatics and putstatics, we are told use field with
+name+descriptor F from class C.   I shall assume getstatics/putstatics
+on (F,C) refer to a different item from ones on (F',C') if either
+F'<>F or C'<>C.  If F=F' and C=C' it must in fact be true that the store
+locations are the same, and an exception is raised if the access flags
+are different.
+
+For aaload and aastore the references in question must be of the
+form T[] and T'[], then we assume that the references are to different
+things as follows; let T,T' be respectively an n,n' dimensional array of
+things of type X,X'.  Then the references refer to different things if
+the access flags are different or else if
+1) n<n' and X is not object (an Object array can store array
+references) or cloneable (Any array can be cast to cloneable and so
+an n' dimensional array can be cast to an n dimensional clonable array);
+note however that the only superclass of cloneable is object.
+2) n'<n and X' is not object or cloneable;
+or
+3) n'=n and neither
+   i) X and X' are both non-reference types, and are identical;
+   nor
+   ii) X and X' are both reference types, with either
+       (a) is_interface(X) is not SOME true, or is_interface(X') is not
+           SOME true.
+              (If X is an interface then whatever the relationship of
+               X and X', the arrays in question could be the same
+               n-dimensional array of Zs, where Z implements X and
+               superclasses X')
+       or
+       (b) maybe_subclass(X,X')
+       or
+       (c) maybe_subclass(X',X)
+
+Justification.  See section 2.6.6 of the VM book plus the
+command reference for aastore, aaload and the other array load and store
+instructions.  In particular, note that Sun's strategy seems to be that
+reading from an array A[] always guarantees us a value of type A, but that
+storing to an array A[] requires us to look at the type at creation of the
+array and the object being stored.
+(1) If n<n'.  It is only permitted to assign a reference A
+    to another reference B
+    with a lower number of dimensions if B is of type Object or a
+    single or multiple-dimension array of things of type Object.
+    Therefore if T[] and T'[] are actually the same array, we must at
+    some time have dropped the number of dimensions by an assignment, and
+    so X has to be Object.
+(2) If n'<n, similar to case (1).
+(3) If n'=n.  Suppose that T and T' are the same array, created originally
+    with actual type an a-dimensional array of things of type A.   If
+    a<>n'=n, the arrays must in the past have dropped dimensions, and this
+    can only be if X and X' are of type Object, in which case 3(ii)(a)
+    (and superfluously (b)) applies.  Otherwise, the only conversions
+    used to get from A to T and T' are those which are validated inductively
+    by the following rules from the VM book:
+       If S and T are class references, we can assign S to T if S is
+          a subclass of T
+       If we can assign SC to TC we can assign a reference of type SC[] to
+          type TC[].
+    Thus, under these rules if we assign a P[] to a Q[], the fundamental
+    type of Q must be the same primitive type as that of P (so the types
+    don't change), or else the fundamental type of Q must be a superclass
+    of the fundamental type of P.  As the superclass relation is transitive
+    and reflexive, we conclude that unless X and X' are both
+    primitive (in which case 3(i) applies), X must be a superclass of A, and
+    similarly X' must be a superclass of A.   Hence X is a superclass of
+    X' or vice-versa, which implies 3(ii).

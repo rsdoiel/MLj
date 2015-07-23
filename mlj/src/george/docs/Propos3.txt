@@ -1,0 +1,25 @@
+Replacement of new
+==================
+
+(27th June 1997)
+
+The new constructor in the basic blocks signature will be replaced by another:
+
+val new:Descriptors.method_ref -> operation
+
+This is to correspond with the Java language form new(args).  The method reference should be to
+an init method, which must (as required by the VM) return void.  The effect of new(method) will be
+to create a new object of type (class of method), call method with args (new object::input list for
+operation).  The output list for the operation should contain one value, which corresponds with the
+new object.
+
+The object is currently guaranteed not to be stored in a local variable before the method has been
+called, to comply with certain incorrect verifiers.  
+
+NB.  I am also preparing proposals to replace field and method references by FieldHandle.Handle and
+MethodHandle.Handle objects, where as with ClassHandle Andrew can use his privileged position to provide
+me with extra information; EG whether a function is pure.  This will affect new again, since its type will
+change to
+val new:MethodHandle.Handle -> operation
+
+

@@ -1,0 +1,189 @@
+Group
+   (* Handles *)
+   signature CLASSHANDLEPRIV
+   structure ClassHandlePriv
+   signature CLASSHANDLE
+   structure ClassHandle
+
+   signature FIELDHANDLEPRIV
+   structure FieldHandlePriv
+   signature FIELDHANDLE
+   structure FieldHandle
+
+   signature METHODHANDLEPRIV
+   structure MethodHandlePriv
+   signature METHODHANDLE
+   structure MethodHandle
+
+   signature ARRAYHANDLEPRIV
+   structure ArrayHandlePriv
+   signature ARRAYHANDLE
+   structure ArrayHandle
+
+   (* Constants *)
+   signature CONSTANTS
+   structure Constants
+
+   (* Types *)
+   signature TYPES
+   structure Types
+
+   (* Values *)
+   signature JAVAINT (* Java integers *)
+   structure JavaInt
+   signature JAVALONG (* Java longs *)
+   structure JavaLong 
+   signature JAVAINTINF (* Java BigIntegers *)
+   structure JavaIntInf
+   signature NUMOPS (* Operations on Java integers and Java longs *)
+   signature JAVASTRING (* Java strings *)
+   structure JavaString
+   signature JAVACHAR (* Java characters *)
+   structure JavaChar
+   signature JAVAFLOAT (* Java floats (32 bit reals) *)
+   structure JavaFloat
+   signature JAVADOUBLE (* Java doubles (64 bit reals) *)
+   structure JavaDouble
+   signature PACKABLE 
+   (* Signature of structures in JavaInt,JavaLong,JavaString,JavaFloat and
+      JavaDouble which represent these as Word8Vectors. *)
+   structure IntConvFlags
+
+   structure BytePackML (* Packs Word8Vectors into JavaStrings *)
+   signature BYTEPACKML
+
+   structure Hash (* Hash functions *)
+   signature HASH
+
+   (* Miscellaneous structures needed by the values structures but also
+      by the backend *)
+   signature ASSERT
+   structure Assert
+   signature NUMBERS
+   structure Numbers
+   signature READINTS
+   structure ReadInts
+
+   (* The Symbol structure, which implements symbols for the compiler *)
+   signature SYMBOL
+   structure Symbol
+is
+   smlnj-lib.cm
+(* Handles for classes, fields, and methods. *)
+   (* class handles *)
+   handles/CLASSHANDLEPRIV.sig 
+   handles/ClassHandlePriv.sml
+   (* What Andrew's code needs to know about class handles *)
+   handles/CLASSHANDLE.sig
+   handles/ClassHandle.sml
+   (* What George's code needs to know about class handles *)
+   (* the field handles and method handles are done in a similar way *)
+   (* field handles *)
+   handles/FIELDHANDLEPRIV.sig
+   handles/FieldHandlePriv.sml
+   handles/FIELDHANDLE.sig
+   handles/FieldHandle.sml
+   (* method handles *)
+   handles/METHODHANDLEPRIV.sig
+   handles/MethodHandlePriv.sml
+   handles/METHODHANDLE.sig
+   handles/MethodHandle.sml  
+   (* array handles *)
+   handles/ARRAYHANDLEPRIV.sig
+   handles/ArrayHandlePriv.sml
+   handles/ARRAYHANDLE.sig
+   handles/ArrayHandle.sml
+   
+(* Java types and constants *)
+   typesconsts/CONSTANTS.sig (* Implements a Constants.constant type
+                                which can represent Java constants *)
+   typesconsts/Constants.sml
+   typesconsts/TYPES.sig (* Implements Types.java_type and some other types
+                            which represent Java types *)
+   typesconsts/Types.sml
+
+(* Java values and code for converting them to and from various
+   formats *)
+   values/JAVAINT.sig (* Java integers *)
+   values/JavaInt.sml
+   values/JAVALONG.sig (* Java longs *)
+   values/JavaLong.sml 
+   values/JAVAINTINF.sig (* Java BigIntegers *)
+   values/JavaIntInf.sml
+
+   values/NUMOPS.sig (* Operations on Java integers and Java longs *)
+   values/REP16.sig (* Rep16:NUMOPS->REP16s is used to represent
+                       Java integers and longs as lists of ordinary
+                       ML integers *)
+   values/Rep16.sml   
+   values/JAVASTRING.sig (* Java strings *)
+   values/JavaString.sml
+   values/JAVACHAR.sig (* Classifies Unicode characters *)
+   values/JavaChar.sml
+   values/JAVAFLOAT.sig (* Java floats (32 bit reals) *)
+   values/JavaFloat.sml
+   values/JAVADOUBLE.sig (* Java doubles (64 bit reals) *)
+   values/JavaDouble.sml
+   values/PACKABLE.sig 
+   (* Signature of structures in JavaInt,JavaLong,JavaString,JavaFloat and
+      JavaDouble which represent these as Word8Vectors. *)
+   values/IntConvFlags.sml
+   (* Flags used for converting strings to JavaInts and JavaLongs *)
+   (* INTOPS, IntConv():INTCONV, MulCarry:MULCARRY, and IntConvFlags,
+      are all used by the fromString functions of JavaLong and JavaInt.
+      INTOPS is the signature defining the basic arithmetic operations
+      needed for conversion from strings to numbers; it is implemented by
+      JavaInt and JavaLong.  These implementations use the MulCarry
+      structure, which provides multiplication by 10 and 16 of Word32s with
+      carry.  The IntConv functor produces a structure of signature INTCONV
+      from an INTOPS structure, which implements fromString for that numeric
+      type.  IntConvFlags contains the flags which parameterise fromString
+      on base & kind (IE signing information). *)
+   values/INTCONV.sig
+   values/IntConv.sml
+   values/INTOPS.sig
+   values/MULCARRY.sig
+   values/MulCarry.sml
+   
+   values/PACKFLOAT.sig (* Used internally for packing reals in Word8Vectors *)
+   values/PackFloat.sml
+   values/UNPACKFLOAT.sig (* Used internally for unpacking reals from
+                             Word8Vectors. *)
+   values/UnPackFloat.sml
+
+   values/BYTEPACKML.sig (* Packs Word8Vectors to JavaStrings *)
+   values/BytePackML.sml
+   ../basis/BYTEPACK.sig (* common code used by BytePackML and BytePackJava
+                          (part of the basis). *)
+   ../basis/BytePack.sml
+
+
+   (* The structures in georgeutils are used by other code in this sources.cm
+      file but are also used by the backend *)
+   georgeutils/ASSERT.sig (* Used for reporting errors when decoding
+                             classfiles and unpacking values from 
+                             Word8Vectors *)
+   georgeutils/Assert.sml
+   georgeutils/NUMBERS.sig (* Used for encoding numbers as Word8Vectors *)
+   georgeutils/Numbers.sml
+   georgeutils/READINTS.sig (* Used for reading integers and various other
+                               miscellaneous input operations on binary
+                               instreams *)
+   georgeutils/ReadInts.sml
+
+   georgeutils/W8Order.sml (* ORD_KEY for Word8Vectors *)
+   georgeutils/HASH.sig (* Hash functions *)
+   georgeutils/Hash.sml
+
+   georgeutils/SYMBOL.sig (* Implements symbols for the compiler *)
+   georgeutils/Symbol.sml
+   georgeutils/GeneralSymbol.sml 
+   (* Exactly like Symbol, only does not set up the MLj reserved words *)
+                
+   georgeutils/RESERVED.sig (* implements MLj-specific reserved words *)
+   georgeutils/Reserved.sml
+
+
+
+
+

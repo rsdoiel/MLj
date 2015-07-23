@@ -1,0 +1,718 @@
+(*......................................................................*)
+(* MLj - a Standard ML to Java bytecode compiler                        *)
+(* Copyright (C) 1999 Persimmon IT Inc.                                 *)
+(*                                                                      *)
+(* This program is free software; you can redistribute it and/or        *)
+(* modify it under the terms of the GNU General Public License          *)
+(* as published by the Free Software Foundation; either version 2       *)
+(* of the License, or (at your option) any later version.               *)
+(*                                                                      *)
+(* This program is distributed in the hope that it will be useful,      *)
+(* but WITHOUT ANY WARRANTY; without even the implied warranty of       *)
+(* MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the        *)
+(* GNU General Public License for more details.                         *)
+(*                                                                      *)
+(* You should have received a copy of the GNU General Public License    *)
+(* along with this program; if not, write to the Free Software          *)
+(* Foundation, Inc., 59 Temple Place - Suite 330, Boston,               *)
+(* MA 02111-1307, USA.                                                  *)
+(*......................................................................*)
+
+structure Date :> DATE =
+struct
+   open Int
+   open General
+   open Option
+   open Bool
+   open List
+   val op= = Prim.=
+   val op<> = Prim.<>
+
+   val op^ = String.^
+   val valOf = Option.valOf (* Java.unsafeValOf *)
+   (* Should be safe to replace by Java.unsafeValOf 
+      except that we've not implemented it for arrays yet *) 
+
+   datatype weekday = 
+      Mon
+   |  Tue
+   |  Wed
+   |  Thu
+   |  Fri
+   |  Sat
+   |  Sun
+
+   datatype month =
+      Jan
+   |  Feb
+   |  Mar
+   |  Apr
+   |  May
+   |  Jun
+   |  Jul
+   |  Aug
+   |  Sep
+   |  Oct
+   |  Nov
+   |  Dec
+   
+   (* These numbers should match those in java/lang/Calendar. *)
+   fun monthToInt day =
+   (case day of
+      Jan => 0
+   |  Feb => 1
+   |  Mar => 2
+   |  Apr => 3
+   |  May => 4
+   |  Jun => 5
+   |  Jul => 6
+   |  Aug => 7
+   |  Sep => 8
+   |  Oct => 9
+   |  Nov => 10
+   |  Dec => 11
+   )   
+
+   fun intToMonth i =
+   (case i of
+      0 => Jan
+   |  1 => Feb 
+   |  2 => Mar 
+   |  3 => Apr 
+   |  4 => May 
+   |  5 => Jun 
+   |  6 => Jul 
+   |  7 => Aug 
+   |  8 => Sep 
+   |  9 => Oct 
+   |  10 => Nov
+   |  11 => Dec
+   |  _  => 
+      raise Fail 
+        ("In Date structure, month " ^
+           (if i=12
+            then
+               "UNDECIMBER (last lunar month)"
+            else
+               "number "^Int.toString i
+            ) ^
+         "not recognised"
+         )
+   )
+
+   fun intToDay i =
+   (case i of
+      1 => Sun
+   |  2 => Mon
+   |  3 => Tue
+   |  4 => Wed
+   |  5 => Thu
+   |  6 => Fri
+   |  7 => Sat
+   |  _ => raise Fail(
+      "In Date structure, day number "^Int.toString i^" not recognised"
+      )
+   )
+
+   type Calendar = java.util.Calendar
+   type GregorianCalendar = java.util.GregorianCalendar
+   type Locale = java.util.Locale
+   type Date = java.util.Date
+   type DateFormat = java.text.DateFormat
+   type DateFormatSymbols = java.text.DateFormatSymbols
+   type TimeZone = java.util.TimeZone
+   type SimpleTimeZone = java.util.SimpleTimeZone
+   type HashTable = java.util.Hashtable
+   type String = java.lang.String
+
+   val local_zone=valOf(java.util.TimeZone.getDefault())
+   val gmt_zone=valOf(java.util.TimeZone.getTimeZone("GMT"))
+      (* This will have to do for UTC until UTC comes along . . . *)
+
+   open java.util.Calendar
+
+   val AD=1 (* _getfield Calendar "AD" - field missing in jdk1.1.1 *)
+
+
+   type date = Calendar
+
+   fun unGreg(x:GregorianCalendar)= x :> Calendar
+
+   exception Date=java.lang.IllegalArgumentException
+
+
+   local
+      val hash_size=29
+      (* We implement lookup_zone, which obtains a TimeZone a given number
+         of milliseconds west of GMT.  To avoid constructing a new
+         time zone object each time, we use a hash table, indexed on the
+         number of milliseconds mod hash_size.
+         
+         It is crucial that hash_size be coprime with the number of
+         milliseconds in an hour, and so it mustn't be divisible by
+         2,3 or 5.
+         *)
+      val timezones:(int*SimpleTimeZone) list array=
+         Array.array(hash_size,[])
+ 
+      fun make_zone(mswest:int):SimpleTimeZone=
+      let
+         (* Create simple time zone with no daylight saving.
+            This operation is expensive, so try to avoid it if we can *)
+         val mseast= ~mswest
+         val () = if mseast=mswest then raise Date else ()
+           (* Check for largest negative integer *)
+         val sign=mseast<0
+         val abs=if sign then mswest else mseast
+         val id=
+            String.concat[
+               "GMT",
+               if sign then "W" else "E",
+               Int.toString abs,
+               "ms"
+               ]
+         val zone= _new SimpleTimeZone(mseast,id)
+      in
+         zone
+      end
+
+      fun list_search(mswest:int,l:(int*SimpleTimeZone) list)=
+        (case l of
+           [] => NONE
+        |  (i,s)::rest =>
+              if i=mswest 
+              then
+                 SOME s
+              else
+                 list_search(mswest,rest)
+        )
+
+      _classtype ZoneMonitor {
+         _synchronized _static _protected _method "I"
+            (index:int,r:(int*SimpleTimeZone)):SimpleTimeZone=
+            (* Atomic insert, checking whether it has already been done.
+               This should not be called unless we are fairly sure it has
+               not been done anyway. *)
+         let
+            val list=Array.sub(timezones,index)
+         in
+            (case list_search(#1 r,list) of
+               NONE => (Array.update(timezones,index,r::list);#2 r)
+            |  SOME s => s
+            )
+         end
+         }  
+
+   in           
+      fun lookup_zone(mswest:int):SimpleTimeZone=
+      let
+         val index=Int.mod(mswest,hash_size)
+      in
+         (case list_search(mswest,Array.sub(timezones,index)) of
+            SOME s => s
+         |  NONE =>
+            _invoke ZoneMonitor "I" (index,(mswest,make_zone mswest))
+         )
+      end
+   end
+
+   fun date' {year:int,month':int,day:int,hour:int,minute:int,second:int,
+     offset}=
+   let
+      fun bt()=raise Date
+
+      val calendar=
+         _new GregorianCalendar (year, month', day, hour, minute, second)
+
+      val ()=
+         (case offset of
+            NONE => ()
+         |  SOME time =>
+            let
+               val mswest=Int.fromLarge(Time.toMilliseconds time)
+                  handle Overflow => bt()
+            in
+              calendar.#setTimeZone(lookup_zone mswest)
+            end
+         )
+
+      val mstime= calendar.#getTime ()
+
+      val ()= calendar.#setTime(mstime)
+      (* This is to get GregorianCalendar to fill in missing fields.
+         *)
+   in
+      unGreg calendar
+   end
+
+   fun date{year,month,day,hour,minute,second,offset}=
+      date'{
+         year=year,month'=monthToInt month,day=day,
+         hour=hour,minute=minute,second=second,offset=offset}
+      
+
+   fun compare(c1:Calendar,c2:Calendar)=
+      if c1.#before(c2)
+      then
+         LESS
+      else if c1.#after(c2)
+      then
+         GREATER
+      else
+         EQUAL
+
+   fun makefun field (calendar:Calendar)= calendar.#get(field)
+   
+   val year'=makefun YEAR
+   val era=makefun ERA
+   fun year(calendar:Calendar)=
+   (* This is almost identical to year' except that we return negative
+      numbers for BC (excepting of course the year 1BC which is 0).
+      From the source of java.lang.GregorianCalendar it would seem as
+      if Java always returns a positive year number *)
+   let
+      val y=year' calendar
+      val e=era calendar
+   in
+      if e=AD 
+      then
+         y
+      else 
+         1-y
+   end
+      
+   val month'=makefun MONTH
+   val month=intToMonth o month'
+   val day=makefun DATE
+   val hour=makefun HOUR_OF_DAY
+   val hour'=makefun HOUR
+   val minute=makefun MINUTE
+   val second=makefun SECOND
+   val weekDay'=makefun DAY_OF_WEEK
+   fun weekDay0 d=weekDay' d - 1
+   val weekDay=intToDay o weekDay'
+   val yearDay=makefun DAY_OF_YEAR
+   val zone_offset=makefun ZONE_OFFSET
+   val dst_offset=makefun DST_OFFSET
+
+   fun tzname(z:TimeZone)= valOf(z.#getID())
+   fun javadate(c:Calendar)= c.#getTime ()
+
+   val local_name=tzname local_zone
+
+   val ms_in_hour=IntInf.fromInt 3600000
+
+
+   fun localOffset'(calendar:Calendar)=
+      Time.fromMilliseconds(IntInf.~(IntInf.fromInt
+         (zone_offset calendar + dst_offset calendar)))
+   
+   fun offset (calendar:Calendar)=
+   let
+      val timezone= valOf(calendar.#getTimeZone ())
+   in
+      if tzname timezone=local_name
+      then
+         NONE
+      else
+         SOME(localOffset' calendar)
+   end
+
+   fun localOffset()=localOffset'(_new GregorianCalendar () :> Calendar)
+  
+   fun isDst' (calendar:Calendar)=dst_offset calendar<>0
+   val isDst = SOME o isDst'
+
+   fun fromTimeGeneral(t:Time.time,z:TimeZone)=
+   let
+      val cal= _new GregorianCalendar z
+      val ms=Int64.fromLarge(Time.toMilliseconds t)
+      val date= _new Date ms
+      val () = cal.#setTime(date)
+   in
+      cal
+   end
+
+   fun fromTimeLocal(t:Time.time)=unGreg(fromTimeGeneral(t,local_zone))
+   fun fromTimeUniv(t:Time.time)=unGreg(fromTimeGeneral(t,gmt_zone))
+
+   fun getDate(calendar:Calendar):Date = valOf(calendar.#getTime ())
+
+   fun toTime(calendar:Calendar)=
+   let
+      val date:Date= getDate calendar
+      val millitime = date.#getTime()
+      val time=Time.fromMilliseconds(Int64.toLarge(millitime))
+   in
+      time
+   end
+      
+   (* This function returns the (abbreviated) time zone name
+      (which may depend upon whether daylight is being saved;
+      EG in the UK we call it "GMT" or "BST"). *)
+     
+   fun timezone_name(calendar:Calendar)=
+   let
+      val timezone= valOf(calendar.#getTimeZone())
+   in
+      tzname timezone
+   end
+
+   fun weekYear date=
+   (* Week number in year, as defined for %U.
+      (We cannot use the Java field since this always has the
+      first day of the year with week 1) *)
+   let
+      val yD=yearDay date (* from 1 *)
+      val wD=weekDay' date (* from 1 *)
+      (* Number all days so that New Year's Day of this year is Day 1.
+         This t is Day yD.
+
+         We want the number of X such that day X is in this year, before or
+         equal to t, and day X is a Sunday.
+         In other words, 1<=X<=yD and day X is a Sunday.  The Sunday starting
+         the week beginning t is day L, where L= yD - wD + 1.
+
+         So we want the number of X with 1<=X<=L with X mod 7 = L mod 7.
+         Write X as L-7M.  Then we want the number of M with
+            1<=L-7M<=L
+         IE
+            0<=M<=(L-1)/7
+         IE 
+            0<=M<=floor(L-1/7)
+         This number is 
+            floor(L-1/7) + 1
+         =
+            floor(L+6/7)
+            L+6 is always non-negative.
+         *)
+         
+      val k=yD-wD+7 (* k=L+6 *)
+   in
+      Int.quot(k,7) (* as k is always non-negative this is floor(k,7) *)
+   end
+
+   fun weekYearMonday date=
+   (* Similar job for Monday.
+      L = last Monday before or equal to today, then logic is the same.
+      *)
+   let
+      val yD=yearDay date (* from 1 *)
+      val wD=weekDay' date (* from 1 *)
+      (* L=yD-wD+2 unless wD=1 in which case it is yD-wd-5=yd-6
+         k=L+6 = yD-wD+8 or if wD1=1, yd *)
+      val k=
+         if wD=1
+         then
+            yD
+         else
+            yD-wD+8
+   in
+      Int.quot(k,7)
+   end
+
+   local
+      (* Obtain the locale-dependent strings, EG "Feb" and so on.
+         We assume that locale doesn't change.  We can get away with this
+         because the Date specification doesn't say much about locale
+         anyway. *)
+      val localsymbols= _new DateFormatSymbols()
+      val months= valOf(localsymbols.#getMonths ())
+         (* Full names of months *)
+      val smonths= valOf(localsymbols.#getShortMonths ())
+         (* Short names of months.  (These should all have length 3 but
+            we don't enforce that.) *)
+      val weekdays=
+         valOf(localsymbols.#getWeekdays ())
+      val sweekdays=
+         valOf(localsymbols.#getShortWeekdays ())
+      val ampms=
+         valOf(localsymbols.#getAmPmStrings ())
+   in
+      fun month_name c=
+         valOf(Array.sub(months,month' c))
+      fun smonth_name c=
+         valOf(Array.sub(smonths,month' c))
+      fun wkday_name c=
+         valOf(Array.sub(weekdays,weekDay' c))
+      fun swkday_name c=
+         valOf(Array.sub(sweekdays,weekDay' c))
+      fun ampm isafternoon=
+         valOf(Array.sub(ampms,if isafternoon then 1 else 0))
+   end
+
+   exception readDateEx (* Raised when we fail to read a date *)
+
+   local
+      (* Get Locale-dependent strings for the US.  These are used for
+         toString, fromString and scan.  I'd like to use UK rather than
+         US, but the results are the same, toString/fromString/scan
+         give American style dates, and unfortunately Locale.US is
+         probably more likely to exist than Locale.UK. *)
+      val us_symbols= _new DateFormatSymbols (java.util.Locale.UK)
+      val us_smonths=
+         valOf(us_symbols.#getShortMonths ())
+      val us_sweekdays=
+         valOf(us_symbols.#getShortWeekdays ())
+   in
+      fun us_smonth_name c=
+         valOf(Array.sub(us_smonths,month' c))
+      fun us_swkday_name c=
+         valOf(Array.sub(us_sweekdays,weekDay' c))
+
+    
+      fun read_month'(s:string,start:int)=
+      (* Return number of last month whose short name is a prefix of s[start:],
+         or raise readDateEx if there is none.. *)
+      let
+         fun check i= (* Check from month i (numbered from 0) down *)
+         let
+            val mname=Array.sub(us_smonths,i)
+         in
+            if s.#startsWith(mname,start)
+            then
+               i
+            else
+               check(i-1)
+         end
+      in
+         (check 11) handle Subscript => raise readDateEx
+      end         
+   end
+
+   local
+      (* Get local DateFormats for formatting date and time, just date, and 
+         just time  (Used for %c, %x and %X *)
+      fun set_zone (fmt:DateFormat) = fmt.#setTimeZone (local_zone)
+      (* By default DateFormat thinks its being called in California *)
+
+      val datetime_fmt= valOf(java.text.DateFormat.getDateTimeInstance())
+      val date_fmt= valOf(java.text.DateFormat.getDateInstance())
+      val time_fmt= valOf(java.text.DateFormat.getTimeInstance())
+      val ()= (set_zone datetime_fmt;set_zone date_fmt;set_zone time_fmt)
+
+      fun makefun (fmt:DateFormat) cal=
+         valOf(fmt.#format(getDate cal))
+   in
+      (* Each of these functions returns a string.  It would probably be 
+         quicker if they appended to a StringBuffer, but that seems like too 
+         much trouble (and I don't know what to do about FieldPosition). *)
+      val datetime_string=makefun datetime_fmt
+      val date_string=makefun date_fmt
+      val time_string=makefun time_fmt
+   end
+
+
+   fun timezone_string(date:Calendar)=
+      tzname(valOf(date.#getTimeZone ()))
+ 
+   fun local_time(calendar:Calendar)=
+      valOf(calendar.#toString ())
+      
+   (* Here is the code for fmt, toString, scan and fromString.
+      From here to the end of this file, the code should be identical
+      between Date.sml.jdk1.1.1 and Date.sml.jdk1.0.2.
+
+      The Java class DateFormat does NOT have the functionality we need;
+      for example it cannot produce an abbreviated month name, nor the
+      concatenation of two identical formats *)
+
+   val YearOverflow=Fail 
+      "In Date structure, years before 0 or after 9999 cannot be handled"
+
+   (* Functions for appending a 1,2,3 or 4 digit number to a StringBuffer,
+      including the zeros.  Only int4 does bounds checking, because
+      it is used for years. *)
+   fun int1(output,n)=
+      StringBuffer.appendChar(output,Char.chr(Char.ord(#"0") + n))
+   fun int2(output,n)=(int1(output,Int.quot(n,10));int1(output,Int.rem(n,10)))
+   fun int3(output,n)=
+      (int1(output,Int.quot(n,100));int2(output,Int.rem(n,100)))
+   fun int4(output,n)=
+   let
+      val ()= 
+         if n<0 orelse n>=10000
+         then
+            raise YearOverflow
+         else
+            ()
+   in
+      (int1(output,Int.quot(n,1000));int3(output,Int.rem(n,1000)))
+   end 
+
+   fun fmt (s:string) (date:date)=
+   let
+      (* A % at the end of the format string is ignored. *)
+
+      val guessed_length=String.size s + Int.quot(String.size s,2)
+      val output=StringBuffer.emptyWith(guessed_length)
+
+      fun out string=StringBuffer.appendString(output,string)
+      fun do_escape ch=
+         (case ch of
+            #"a" => out(swkday_name date)
+         |  #"A" => out(wkday_name date)
+         |  #"b" => out(smonth_name date)
+         |  #"B" => out(month_name date)
+         |  #"c" => out(datetime_string date)
+         |  #"d" => int2(output,day date)
+         |  #"H" => int2(output,hour date)
+         |  #"I" => int2(output,
+                       let 
+                          val h=hour' date 
+                       in 
+                          if h=0 
+                          then 
+                             12
+                          else h
+                       end)
+         |  #"j" => int3(output,yearDay date)
+         |  #"m" => int2(output,month' date + 1)
+         |  #"M" => int2(output,minute date)
+         |  #"p" => out(ampm(hour date>=12))
+         |  #"S" => int2(output,second date)
+         |  #"U" => int2(output,weekYear date)
+         |  #"w" => int1(output,weekDay0 date)
+         |  #"W" => int2(output,weekYearMonday date)
+         |  #"x" => out(date_string date)
+         |  #"X" => out(time_string date)
+         |  #"y" => int2(output,Int.rem(year' date,100)) 
+                    (* year' so that BC dates are represented by
+                       their absolute value - EG 386BC will go to
+                       "86". *)
+         |  #"Y" => int4(output,year date)
+         |  #"Z" => out(timezone_string date)
+         |  c    => StringBuffer.appendChar(output,c)
+            (* also covers %% *)
+         )
+
+      fun dochar i=
+      (* Handle from char i of the string. Raise subscript when finished.
+         *)
+      let
+         val ch=String.sub(s,i)
+      in
+         if ch= #"%"
+         then
+           (do_escape(String.sub(s,i+1));
+            dochar(i+2))
+         else
+           (StringBuffer.appendChar(output,ch);
+            dochar(i+1))
+      end
+
+      val ()= dochar 0 handle Subscript => ()
+   in
+      StringBuffer.toString output
+   end
+
+   fun toString date=
+   let
+      val output=StringBuffer.emptyWith 24
+      fun ap s=StringBuffer.appendString(output,s)
+      fun space()=StringBuffer.appendChar(output,#" ")
+      fun colon()=StringBuffer.appendChar(output,#":")
+   in
+     (ap(us_swkday_name date);
+      space();
+      ap(us_smonth_name date);
+      space();
+      int2(output,day date);
+      space();
+      int2(output,hour date);
+      colon();
+      int2(output,minute date);
+      colon();
+      int2(output,second date);
+      space();
+      int4(output,year date);
+      StringBuffer.toString output
+      )
+   end
+
+   fun readDate(s:string,start:int)=
+   (* Read 24-character date in string, starting at s[index].
+      Raise Subscript if the string isn't long enough and
+      readDateEx if we can't parse it.
+      This function is used for scan and fromString. 
+
+      The main requirement seems to be that the function is inverse
+      to toString, while checking as much as reasonable.  We cannot
+      do anything with the weekday, so we ignore it.  However we do
+      check for the other things (spaces and colons). *)
+   let
+      fun sub i=String.sub(s,start+i)
+      fun check_colon i=if sub i= #":" then () else raise readDateEx
+      fun check_space i=if sub i= #" " then () else raise readDateEx
+      fun parse1 i=
+      let
+         val ch=sub i
+         val dval=Char.ord ch - Char.ord(#"0")
+      in
+         if dval<0 orelse dval>9
+         then
+            raise readDateEx
+         else
+            dval
+      end
+
+      fun parse2 i=
+         10*parse1 i + parse1(i+1)
+ 
+      fun parse4 i=
+         100*(parse2 i) + parse2(i+2)
+
+      val ()=
+        (check_space 3;
+         check_space 7;
+         check_space 10;
+         check_colon 13;
+         check_colon 16;
+         check_space 19
+         )
+      
+      val month'=read_month'(s,start+4)
+      val day=parse2 8
+      val hour=parse2 11
+      val minute=parse2 14
+      val second=parse2 17
+      val year=parse4 20
+   in
+      date'{year=year,month'=month',day=day,hour=hour,minute=minute,
+         second=second,offset=NONE}
+   end
+    
+   fun fromString s=
+   let
+      fun first_nonspace i=
+         if Char.isSpace(String.sub(s,i))
+         then
+            first_nonspace(i+1)
+         else
+            i
+   in
+      SOME(readDate(s,first_nonspace 0))
+   end handle readDateEx => NONE | Subscript => NONE
+
+   fun scan getc src=
+   let
+      val src=StringCvt.skipWS getc src
+      (* Get 24 characters *)
+      val output=StringBuffer.emptyWith 24
+      fun doget(src,i)=
+         if i=0 
+         then
+            src
+         else
+            (case getc src of
+               NONE => raise readDateEx
+            |  SOME(c,src) => 
+                 (StringBuffer.appendChar(output,c);
+                  doget(src,i-1)
+                  )
+            )
+      val src=doget(src,24)
+   in
+      SOME(readDate(StringBuffer.toString output,0),src)
+   end handle readDateEx => NONE
+end (* struct *)

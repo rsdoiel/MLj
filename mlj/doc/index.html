@@ -1,0 +1,151 @@
+<!DOCTYPE HTML PUBLIC "-//IETF//DTD HTML//EN">
+<html>
+<title>The MLj Compiler</title>
+
+  <body bgcolor="#ffffff">
+<center>
+<h1>The MLj Compiler</h1>
+</center>
+<HR>
+
+MLj is a complete system for SML to Java bytecode compilation.
+Its features include:
+<ul>
+<li>
+conformance to a subset of <a href="aboutsml.html">SML '97</a>, 
+approximately everything except for functors;
+<li>
+implementation of a large subset of the <a
+href="http://www.dina.kvl.dk/~sestoft/sml/">SML Basis Library</a>;
+<li>
+typed-checked interlanguage working extensions for interfacing 
+existing Java classes and for implementing new classes with methods written
+in SML;
+<li>
+automatic recompilation management;
+<li>
+whole-program optimisation to produce compact compiled code.
+</ul>
+
+<h3>Why use MLj?</h3>
+If you're an ML programmer, MLj lets you keep using your favourite language
+      whilst taking advantage of Java's growing infrastructure:
+<ul>
+<li>MLj brings the benefits of Java's "Write Once, Run Anywhere(tm)"
+cross-platform bytecode to Standard ML. Applications written using MLj
+can be delivered as applications or as web applets and run unchanged
+on any computer with a compliant Java Virtual Machine. </li>
+<p>
+<li>MLj also gives the ML programmer instant access to a large collection
+of standard Java libraries and third-party Java code. ML code can make
+use of Java libraries for such things as graphical user interface
+programming, 2D and 3D graphics, servlets, database connectivity, security,
+networking and sound. Because the `semantic gap' between ML and Java
+is smaller than that between ML and, say, C (both ML and Java are
+strongly typed and have automatic storage management), this
+interlanguage working is easy and safe.</li><p>
+</ul>
+If you're a Java programmer, MLj brings you the benefits of
+interworking with a powerful and elegant modern functional programming
+language. ML's algebraic datatypes, pattern matching, higher-order
+	functions, type inference and great module system make code
+	shorter, easier to reason about and easier to maintain. You
+	can use MLj to write just part of a Java application in ML,
+	using each language for the things it's best at.
+
+
+<h3>Limitations of MLj 0.2</h3>
+MLJ is designed for writing compact stand-alone applications, applets
+      and libraries and does not have ML's usual interactive
+      top-level read-eval-print loop. Instead, it operates much more
+      like a traditional batch compiler. Much existing ML code has no
+      real user interface at all - it just consists of a collection of
+      definitions which are used by calling functions from within the
+      interactive ML environment. Such programs have to have at least
+      some user interface code added before they can be compiled into
+      stand-alone applications with MLJ.
+
+<p>
+MLj 0.2 is a snapshot of the development effort at Persimmon IT.
+As such, and apart
+from the inevitable bugs, it has a number of limitations which will be
+addressed in future releases. The most serious are:
+<ul>
+<li>No functors. MLj 0.2 implements almost all of the new SML'97
+	  language including substructures, the <tt>where</tt>
+	  construct and so on, but does not implement functors. We
+	  intend to add them in a later release.<p></li>
+
+<li>Lack of tail-call optimisation. Although tail-call optimisation is
+	explicitly permitted in the Java language specification, no
+	  current implementation of the Java virtual machine actually
+	  does it. MLj 0.2 can turn many simple tail calls into jumps but
+	  leaves others as real calls. This, together with the fact
+	  that most JVMs have a fixed maximum stack size, means that
+	  many ML programs run out of stack space on reasonable-sized
+	  inputs.<p></li>
+
+<li>Compile-time performance. MLj compile times can be rather long. This is
+	because the entire program is optimised in order to get
+	  satisfactory run-time performance and compact code.
+The whole-program approach to optimisation also
+	  limits the maximum size of programs you can realistically
+	  compile with MLj (very roughly, of the order of 10,000 lines
+	  on a "typical" machine).<p></li>
+
+<li>Run-time performance. This obviously depends on the implementation
+	of the Java virtual machine used to run the compiled code, and
+	  with a modern Just-In-Time compiling JVM, MLj's speed is
+	  usually better than that of a dedicated SML bytecode
+	  interpreter. But it's not always competitive with good native code
+	  SML compilers. In future, MLj will get better and JVM
+	  technology will improve, but a dedicated native compiler
+	  will always be the fastest way to run pure SML code. </li>
+</ul>
+
+<h3>Availability and System Requirements</h3> 
+MLj 0.2 may be downloaded and used under the GNU Public license.
+We currently have pre-built binaries 
+available for x86 (Linux and Win32) and Sparc (Solaris), and source-only
+distribution available for installation on systems that have the SML/NJ
+compiler.
+<p>
+MLj runs best on a fairly powerful machine (what doesn't?). We
+certainly wouldn't really recommend trying to use it with less than
+32MB of RAM or a processor slower than a 100MHz Pentium. The full
+	distribution requires around 13MB of disk space.
+<p>
+You'll also need the standard Java class libraries and some way to run
+Java programs. The best thing to do is to get a copy of Sun's Java
+Development Kit (or one of its many ports), or some other third-party
+	Java development environment, such as Microsoft's SDK for Java.
+
+It is also possible to
+work with just a copy of Netscape for running programs and providing
+the libraries against which MLj compiles (you'll also need an
+<tt>unzip</tt> program if you have a recent version of Netscape which
+stores the standard class libraries in compressed format). 
+
+<h3>Documentation</h3> 
+MLj User Guide as <a href=mlj.dvi>DVI</a> (108k),  <a href=mlj.pdf>PDF</a>
+(355k) or 600dpi <a href=mlj.ps>PostScript</a> (282k).
+
+<h3>The MLj Team</h3> MLj was developed by <a
+href="http://research.microsoft.com/~nick/default.htm">Nick Benton</a>
+, Andrew Kennedy and George Russell of Persimmon IT's Cambridge
+research group and the download site is currently hosted by <a
+href="http://www.dcs.ed.ac.uk/home/stark/">Ian Stark</a> and <a
+href="http://www.dcs.ed.ac.uk/home/tpcc/">Tom Chothia</a> of the
+University of Edinburgh.
+
+<p>
+<hr>
+<table width="100%">
+<tr>
+<td align=left><a href="../index.html">MLj home</a></td>
+<td align=right>Comments to:
+<a href="mailto:mlj@dcs.ed.ac.uk">mlj@dcs.ed.ac.uk</a></td></tr>
+</table>
+
+  </body>
+</html>

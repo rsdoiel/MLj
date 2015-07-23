@@ -1,0 +1,132 @@
+Proposed Incompatible Modifications to the Basic Block Code
+===========================================================
+
+(2nd July 1997)
+
+Group Initialisation
+--------------------
+
+Two pseudo-operations, begin_init and end_init are to be introduced.
+val begin_init:operation
+val end_init:operation
+These should only be used with null input and output lists, and bracketting
+a sequence of instructions which must be either putfield or new.
+
+begin_init and end_init do not correspond to any Java bytecodes themselves,
+but help to control where the basic block code can perform MOVEABLE and
+PURE functions.  Suppose f is designated a pure function (int*int->int).
+Suppose we compile f(1,2) as follows:
+
+   Create a new object P with space for 2 integers
+   put 1 in P.#1
+   put 2 in P.#2
+( some time later )
+   Call f with argument P.
+
+Even though f is pure, we should not call it until we have carried out the
+two puts, as well as creating P.
+
+So this should be compiled as
+
+   begin_init
+   Create a new object P with space for 2 integers
+   put 1 in P.#1
+   put 2 in P.#2
+   end_init
+(some time later) 
+   Call f with argument P.
+
+Then the basic block code can work out that f must not be called until after the puts have been
+done.  Say that a value X depends on a put Y if X was created by new in the same begin_init/end_init
+sequence as the put Y.
+I haven't properly written out the changes to depend.txt relating to this, but a MOVEABLE or
+PURE function can be moved anywhere in a method EXCEPT before
+either
+   (1) the creation of one of its arguments 
+   (2) a put upon which one of its arguments depends. 
+
+I agree that in an ideal world a begin_init/end_init sequence would be wrapped up in a single instruction
+but this does not fit with the current datatype of instruction lists in which every operation takes one
+list of inputs and produces one list of outputs.
+
+Locks
+-----
+
+The syntax of monitorenter and monitorexit will change so that they don't have arguments:
+
+val monitorenter:operation
+val monitorexit:operation
+
+Method calls and load/stores will never be moved across monitorenter or monitorexit instructions.
+
+
+Field and Method handles
+------------------------
+
+The current procedure for accessing fields and invoking methods is to be abolished, incompatibly.
+All field and method operations (getfield/putfield/getstatic/putstatic for fields;
+invoke_[blah] for methods) will take either a FieldHandle.Handle or a MethodHandle.Handle instead.
+As with ClassHandle there will be a debugging version of these classes I use, but the production one
+will be produced by Andrew using his extra knowledge.  In addition, the access flags (MUTABLE/IMMUTABLE
+and OPTIONAL/COMPULSORY) will no longer be passed as part of the operation, but accessible through this
+handle. 
+
+The signatures of these classes are very provisional but here are my first drafts.
+
+signature METHODHANDLE=
+sig
+   type Handle
+   val class:Handle->ClassHandle.Handle
+   val name:Handle->JavaString.t 
+   val input_types:Handle->Types.java_type list
+   val output:Handle->Types.java_type option (* NONE for void *)
+   (* Those are the functions we obviously can't do without.  Now for some service functions. *)
+
+   (* reads, writes, exceptional and unbounded classify various impure properties the
+      method may have.  If they don't know, they should return true. *)
+   val reads:Handle->bool
+   (* Returns true if the method depends on state, or reads a MUTABLE field. *)
+   val writes:Handle->bool
+   (* Returns true if the method writes state, or writes a MUTABLE field. *)
+   val exceptional:Handle->bool
+   (* Returns true if the method raises an exception *)
+   val unbounded:Handle->bool
+   (* Returns true if the method doesn't return *) 
+
+   val is_init:Handle->bool
+   (* is_init returns true if and only if the method is an <init> method.  Of course I could just do
+      local
+         val init_string=JavaString.fromString "<init>"
+      in
+         fun is_init h=JavaString.equal(h,init_string)
+      end
+      *)
+end
+
+(* Now for FIELDHANDLE *)
+signature FIELDHANDLE=
+sig
+   type Handle
+   val class:Handle->ClassHandle.Handle
+   val name:Handle->JavaString.t 
+   val field_type:Handle->Types.java_type
+   (* Now for various service functions *)
+   val maybe_same:Handle*Handle->bool
+   (* maybe_same should return true if the two handles may refer to the same 
+      area of storage *)
+end
+
+Changes to Dependency Rules
+---------------------------
+
+See depend.txt
+     
+
+
+
+
+
+
+
+
+

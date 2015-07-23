@@ -1,0 +1,71 @@
+Proposed Extension to Basic Block format
+========================================
+26th June 1997
+
+Reason: I'm planning to add an optimiser at the start of the basic block code which inserts this
+   new form.  It may as well be made public because Andrew can probably insert these extensions
+   better than I can, and if he does it will probably help to remove an irritating O(n^2) problem
+   with long sequences of basic blocks.
+
+The extension is to allow basic blocks to be called in a function-like way in the middle of other
+basic blocks.  This means that if you do 3+(if bool then x else y) a basic block
+can be called to evaluate (if bool then. . .) without having to drag 3 along with it.
+This is implemented by copying; the code for (if bool then . .) is inserted in the appropriate place.
+So these aren't really like functions; while they can be nested, they cannot be called recursively, and
+if nested basic blocks are called in multiple places we may get code expansion.  If we do need to
+call basic blocks in multiple places, the best approach would probably be to implement the extension
+using jsr/rets, though of course this still won't allow recursion.  If we later want to use jsr/rets
+we can probably integrate them in this model without changing the interface.
+
+The alterations required to the interface are as follows (see bbc/BLOCKS.sig for the current
+situation).
+
+A new constructor for operation:
+val call:block->operation
+A new instruction can be obtained as (call block,{input:value list},{output:value list})
+
+A new constructor for exit:
+val call_return:value list->exit
+
+Semantics
+---------
+
+You can work these out yourself!
+
+Restrictions:
+-------------
+
+These should be fairly obvious and right now I'm not prepared to be too formal.  An "ordinary exit"
+is any exit other than throw, return or call_return.  Block C is "reachable" from Block B if 
+there is a control path going from B to C via ordinary exits.
+
+No call_return is reachable from the first block of the method, or from any target block of a call
+except where the output list associated with the call matches in length the value list associated with
+the call_return.  It is however possible to have returns and throws in blocks reachable from the target
+of a call.  (Thus we allow multiple entry points, as though these have dubious value they don't at the
+moment seem to cost anything.)
+
+There is a major nuisance associated with these restrictions; exceptions are not ordinary exits, and so
+we cannot do a call_return in anything reachable from an exception handler.  There is a good reason for
+this; namely that we can't save things on the stack when exceptions are thrown.  Thus
+3+(if x>9 then f(x) handle Overflow => -1 else 2)
+cannot be compiled with the if inside a call.  If this becomes a major menace I suppose the best way
+would be to try various transformations to remove the problem, and if they fail to go back to the old ways.
+
+It would be helpful if the target of the call always had an empty instruction list followed by a conditional
+jump (since otherwise in the current framework we can move the instruction list to before the call), but
+of course I can always transform to ensure this anyway.  Similarly it would be nice if these called
+blocks returned as soon as the control flow reunited again; eg make (if x>9 then f(x) else 3)+2
+do call_return immediately after the right parenthesis; also (if testA then 1 else 2)+(if testB then 3 else
+4) should compile into 2 call/call-return pairs, since this allows more freedom rearrange things (again
+I can spot this if it becomes a problem).  In general though I'd rather not do anything to alter the
+content of call/call-return pairs which are supplied by Andrew, since my guess is that he can do a better
+job of it than I can because they come directly from the structure of the program.
+
+
+
+
+
+
+
+

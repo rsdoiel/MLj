@@ -1,0 +1,39 @@
+Group is
+
+(*----------------------------------------------------------------------*)
+(* SML/NJ library							*)
+(*----------------------------------------------------------------------*)
+smlnj-lib.cm
+../../george/graph/sources.cm
+../../george/arrays/sources.cm
+../../common/sources.cm
+
+(*----------------------------------------------------------------------*)
+(* Generally useful ADTs          					*)
+(*----------------------------------------------------------------------*)
+Debug.sml
+DEP.sig
+Dep.sml
+Dups.sml
+EQ.sig
+Eq.sml
+Gen.sml
+IMap.sml
+ISet.sml
+Map.sml
+MapFn.sml
+NLIST.sig
+NList.sml
+PRETTY.sig
+Pretty.sml
+QuickSort.sml
+Set.sml
+SetFn.sml
+STACK.sig
+Stack.sml
+NAMES.sig
+Names.sml
+COMPARE.sig
+Compare.sml
+DynIntArray.sml
+

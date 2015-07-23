@@ -1,0 +1,40 @@
+Group is
+   smlnj-lib.cm (* SML/NJ extras *)
+
+   ../backend/sources.cm
+   ../graph/sources.cm
+   ../matrix/sources.cm
+   ../sort/sources.cm
+
+   OBLOCKS.sig (* BLOCKS contains the interface to the blocks code *)
+   OBlocks.sml
+   Old2New.sml
+   BLOCKS.sig
+   Blocks.sml
+
+   Operations.sml
+   Dag.sml
+   DAG.sig
+   BoolArray.sml (* This will go away when BoolArray appears in the
+                    standard library. *)
+   MakeDag.sml
+   MAKEDAG.sig
+
+   Variables.sml
+
+   WIRE.sig
+   Wire.sml
+
+   PRECOMP.sig
+   Precomp.sml
+
+   MAPINT.sig
+   MapInt.sml
+
+   Naive.sml
+
+   EasyLocals.sml (* now only used by Naive *)
+   EASYLOCALS.sig
+
+   PEEPHOLE.sig
+   Peephole.sml

@@ -1,0 +1,100 @@
+(* This version of the MLJIntInfUtils structure contains the definition 
+   IntInfs (where we have Java's BigIntegers) and conversion functions
+   to and from them. *)
+structure MLJIntInfUtils (*:>MLJINT_INF_UTILS *) =
+struct
+   type int=IntInfDatatype.int
+
+   local
+      type BigInt=java.math.BigInteger
+   
+      open General
+
+      val unsafeValOf = Prim.unsafeValOf
+   
+      fun bitlength (x : BigInt) = x.#bitLength ()
+   
+      fun badbits (x,n) = Prim.gt(bitlength x, n)
+   
+      fun isNeg (x : BigInt) = Prim.lt(x.#signum(), 0)
+
+      (* Conversion abbreviations stolen from MLJIntInfUtils.sml.jdk1.0.2 *)
+      fun L (x : Java.int)= _cast Java.long x
+      fun LX (x : Java.int)= 
+      (* cast int to long without sign extension. 
+         There doesn't seem to be an easy way to do
+         this, unfortunately.  Perhaps JITs will have
+         and_with_constants code and spot this kind of thing.
+         *)
+         Prim.And(L x,0xffffffff)
+   
+      fun l (x:Java.long)= _cast Java.int x
+      fun l8 (x:Java.long)= _cast Java.byte x
+      fun ll8(x:Java.int)= _cast Java.byte x
+   
+      fun L8 (x:Java.byte)= _cast Java.long x
+      fun LX8 (x:Java.byte)= Prim.And(L8 x, 0xff)
+      
+      val i2I= L 
+
+      val i2w8=Prim.toWord8 o ll8
+   
+      val i2w=Prim.toWord
+      val i2W=Prim.toWord64 o L (* not used for negative integers *)
+      val I2W=Prim.toWord64 
+      val w2i=Prim.fromWord
+      val w2W=Prim.toWord64 o LX o Prim.fromWord
+      val w82W=Prim.toWord64 o LX8 o Prim.fromWord8
+      val W2i= l o Prim.fromWord64
+      val W2I=Prim.fromWord64    
+      val W2w8=Prim.toWord8 o l8 o Prim.fromWord64
+      val W2w=Prim.toWord o l o Prim.fromWord64
+      fun fromLong x= 
+         _pure (unsafeValOf(java.math.BigInteger.valueOf x))
+
+      fun longVal(x:BigInt)= x.#longValue()
+      fun intVal(x:BigInt)= x.#intValue()
+   in   
+
+      fun fromFixedInt x = fromLong(x)
+
+      fun toFixedInt x =
+        if badbits(x,63)
+        then 
+           raise General.Overflow
+        else 
+           longVal x
+      fun fromInt x=fromFixedInt(i2I x)
+      fun toInt x =
+        if badbits(x,31)
+        then 
+           raise General.Overflow
+        else 
+           intVal x
+
+      fun fromWord x = fromLong(LX(Prim.fromWord x))
+      fun toWord x = Prim.toWord(intVal x)
+      
+      fun fromWord8 x=fromLong(LX8(Prim.fromWord8 x))
+      fun toWord8 x = Prim.toWord8(ll8(intVal x))
+
+      fun fromLargeWord x =
+      let
+         val xlong=Prim.fromWord64 x
+      in
+         if Prim.ge(xlong,Prim.fromWord64 0w0)
+         then
+            fromLong xlong
+         else
+         let
+            val xlow= Prim.And(xlong,Prim.fromWord64 0wx7fffffffffffffff)
+            val xlowinf= fromLong xlow
+            val xinf= unsafeValOf(xlowinf.#setBit(Prim.fromWord 0w63))
+         in
+            xinf
+         end
+      end
+      fun toLargeWord x = Prim.toWord64(longVal x)
+
+   end
+end

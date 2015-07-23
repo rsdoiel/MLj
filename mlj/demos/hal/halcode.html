@@ -1,0 +1,226 @@
+<!DOCTYPE HTML PUBLIC "-//IETF//DTD HTML//EN">
+<html>
+  <head>
+    <title>The structure of the Hal applet</title>
+  </head>
+
+  <body bgcolor="#ffffff">
+<center>
+<h1>The structure of the Hal applet</h1>
+</center>
+<HR>
+The Hal applet is an interesting example of the use of MLj's
+interlanguage working extensions and the way in which MLj applications
+can benefit from the large amount of useful Java code now available
+over the web. Most of the code is the same as that in Larry Paulson's
+book except that it had to be defunctorised to go through MLj. The
+orginal Hal program does not, however, contain any user interface code
+- it just defines a collection of values and functions which are
+intended to be called from within the top-level interactive
+read-eval-print loop of an executing ML system.  MLj doesn't have such
+a loop (and even if it did, downloading a complete ML environment into
+a browser would be somewhat impractical).
+<p>
+So, to compile a stand-alone version of Hal, we first have to write
+some code which accepts, parses and executes commands from the
+user. Returning results doesn't require so much work, since Hal
+already pretty-prints most of those explicitly, rather than just
+returning ML values for the top-level loop to print. But Hal commands
+are often non-trivial ML expressions, involving the application of
+higher-order functions (tacticals), which means that our command
+interpreter should itself understand a small functional language. (Of
+course, ML itself was originally developed for just this purpose!) 
+<p>
+
+To keep things simple, we made the command language be an untyped
+combinatory (variable-free) calculus, for which it is easy to write an
+interpreter which calls into the appropriate functions from original
+Hal code. The parser uses the same general-purpose parser combinators
+as are already used in Hal for parsing logical formulae and so only
+took a few minutes to write. The interpreter was also easy to write -
+its core is only a dozen or so lines of ML. The parser and interpreter
+can be found in the <a
+href="ServerInterpret.sml"><tt>ServerInterpret</tt></a> structure.
+
+<p>
+
+That's all fairly straightforward, and is all one needs to do to
+produce a version of Hal which can be compiled by MLj and run as a
+stand-alone Java <i>application</i> from the command line. Input is read from
+<tt>stdIn</tt> and then parsed and evaluated using the interpreter, which calls
+the core Hal functions which print results to
+<tt>stdOut</tt>. Unfortunately, producing an <i>applet</i> which will run in
+a browser requires a bit more work. When an applet is running,
+<tt>stdOut</tt> goes to the browser's Java console window rather than
+to the page displaying the applet and there's no <tt>stdIn</tt>
+provided at all - Java applets each have their own graphical user
+interface, written using Java's Abstract Windowing Toolkit
+(AWT). Whilst it would be an interesting and worthwhile project to
+write a full graphical front-end to Hal, we decided to start by
+providing a traditional textual interface in a browser window. Even
+that, however, appears to involve writing a significant amount of
+user-interface code to emulate a traditional terminal window: reading
+keypresses, writing to the screen, dealing with the delete key,
+scrolling the window and so on. Writing all that using MLj's Java
+extensions would be easy, but dull. Instead, we did a quick web search
+for terminal emulator applets written in Java, as these should already
+contain appropriate screen and keyboard management code. We chose
+<a
+href="http://www.nacse.org/web/webterm2.0/">WebTerm</a>, 
+which was written by Dianne Hackborn and Melanie Johnson at
+the  <a
+href="http://www.nacse.org">Northwest Alliance for Computational Science and
+Engineering</a>. By
+stripping out the parts dealing with network connections and the
+emulation of particular terminals, we were left with about 800 lines
+of Java code which did what we wanted.
+
+<p>
+
+We then had to decide how to interface the Java and ML parts to create
+our applet. The problem here is that the communication is
+bidirectional and imperative: the Java code has to collect characters
+and send them to the ML code for evaluation and the output of the ML
+code (which is produced by side-effecting printing) has to be fed back
+to the Java window. Even in a simple case, this kind of bidirectional
+communication requires a little care -- one cannot just have the
+Java code refer to a class exported from the ML code <i>and</i> have
+the ML code refer to an application-specific class in the Java code
+because each would then require the other to have been compiled first.
+
+<p>
+
+The solution to the cyclic dependency which we adopted for Hal was to
+make the ML code export two classes. The first of these is
+<tt>HalServer.HalServer</tt> which looks like this:
+<pre>
+_public _classtype HalServer  {
+ _public _static _synchronized _method 
+    processline (arg : string option) : Threads.Thread option =
+ SOME (Threads.new (fn _ => (ServerInterpret.toplevel (valOf arg)))
+
+ _public _static _synchronized _method 
+    registerReader (aReader : Schan.SchanReader option) =
+       (Schan.theReader := aReader)
+}
+</pre>
+
+Ignoring all the threading stuff, this basically presents two methods
+to the Java code, <tt>processline</tt> and
+<tt>registerReader</tt>. The first of these is simply called by the
+Java part of the applet when
+it has a string to be handed over to the top-level parser and
+interpreter. The second is used to set up a channel from the ML to the
+Java by which strings can be printed in the terminal window.
+
+<p>
+
+The structure <tt>Schan</tt> defines the second class exported by ML:
+<pre>
+structure Schan = 
+struct
+
+_public _interfacetype SchanReader {
+ _public _abstract _method handlechan (arg: string option)
+}
+
+val theReader = ref(NONE) : SchanReader option ref
+
+fun write s = case !theReader of 
+               SOME(v) => v.#handlechan (s:string)
+             | NONE => ()
+end
+</pre>
+
+This declares a Java interface <tt>SchanReader</tt> which contains a
+single method <tt>void handlechan(String)</tt>. The Java code includes
+a class which (a) registers itself with the ML code by calling the
+<tt>registerReader</tt> method in <tt>HalServer</tt>, and (b)
+implements the <tt>SchanReader</tt> interface with a method which prints its
+argument in the terminal window:
+<pre>
+public class Toplevel extends Applet implements SchanReader {
+  Terminal myterminal;
+  ...
+  HalServer.registerReader(this);
+  ...
+  public void handlechan (String thedata) {
+    myterminal.write(thedata, 0);
+  }
+</pre>
+
+When the ML code needs to print, it calls <tt>Schan.write()</tt> which
+looks for a registered reader (in the <tt>ref</tt> cell
+<tt>theReader}</tt>, and if it finds one, calls its
+<tt>handlechan</tt> method.
+
+All of that means that the ML code can be compiled first, without
+needing to know about the Java part. The Java can then be
+compiled against the class files generated from the ML compilation:
+<pre>
+% mlj
+MLj 0.2 on x86 under Win32 with basis library for JDK 1.1
+Copyright (C) 1999 Persimmon IT Inc.
+
+MLj comes with ABSOLUTELY NO WARRANTY. It is free software, and you are
+welcome to redistribute it under certain conditions.
+See COPYING for details.
+\ sourcepath +../conc
+\ export HalServer.HalServer HalServer, Schan.SchanReader SchanReader
+\ make
+ ...
+Compilation completed.
+\ quit
+% javac -classpath HalServer.zip Toplevel.java
+%
+</pre>
+The reason that we had to specify the <tt>sourcepath</tt> in the
+compilation of this example is that the <tt>HalServer</tt> class also
+makes use of a structure <tt>Threads</tt> from
+<tt>demos/conc</tt> which provides a trivial ML wrapper
+around Java's ability to create and destroy new concurrent threads.
+
+<p>
+
+The Hal demo takes advantage of Java's built-in concurrency to do the
+ML computation in a different thread from the user interface. This
+allows the user to interrupt a long (or non-terminating) computation
+just by pressing a key. If you look again at the code above for
+<tt>HalServer.processline</tt>, you'll see that it spawns a new thread
+to parse and execute the user command and immediately returns the
+generated thread object to the calling Java code, where it is stored
+in an instance variable of the terminal. The Java code for
+handling keypress events looks at that variable, and if there's a
+currently executing process it is stopped before the key is pressed:
+<pre>
+if (computeThread != null && computeThread.isAlive()) {
+      computeThread.stop();
+      computeThread = null;
+      write("**interrupted**\n",0);
+   }
+</pre>
+
+Similar code is executed when the applet's <tt>stop</tt> method is
+called, so that a long-running computation is terminated when the user
+leaves the page containing the applet.
+
+<p>
+
+This sort of use of Java concurrency in MLj programs is rather crude,
+and should really be replaced by a more well-designed collection of
+functional conncurrency primitives. For the moment, however, it's
+worth noting that MLj does let you write concurrent ML programs and
+that this is often very useful.
+
+
+<p>
+<hr>
+<table width="100%">
+<tr>
+<td align=left><a href="../index.html">MLj home</a></td>
+<td align=right>Comments to:
+<a href="mailto:mlj@dcs.ed.ac.uk">mlj@dcs.ed.ac.uk</a></td></tr>
+</table>
+
+  </body>
+</html>

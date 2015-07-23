@@ -1,0 +1,169 @@
+(* This version of the MLJIntInfUtils structure contains the definition 
+   IntInfs (where we don't have Java's BigIntegers) and conversion functions
+   to and from them. *)
+structure MLJIntInfUtils:>MLJINT_INF_UTILS =
+struct
+   open General
+   open Datatypes
+   val op= = Prim.=
+   val op<> = Prim.<>
+  
+   datatype sign = datatype IntInfDatatype.sign
+   datatype int = datatype IntInfDatatype.int
+  
+
+   structure Ui=MLJUtils.Int
+   structure UI=MLJUtils.FixedInt
+   structure Uw=MLJUtils.Word
+   structure UW=MLJUtils.LargeWord
+
+   fun L (x:Java.int)= _cast Java.long x
+   fun LX (x:Java.int)= 
+   (* cast int to long without sign extension. 
+      There doesn't seem to be an easy way to do
+      this, unfortunately.  Perhaps JITs will have
+      and_with_constants code and spot this kind of thing.
+      *)
+      Prim.And(L x,Java.fromWord64 0wxffffffff)
+
+   fun l (x:Java.long)= _cast Java.int x
+   fun l8 (x:Java.long)= _cast Java.byte x
+   fun ll8(x:Java.int)= _cast Java.byte x
+
+   fun L8 (x:Java.byte)= _cast Java.long x
+   fun LX8 (x:Java.byte)= Prim.And(L8 x,Java.fromWord64 0wxff)
+   
+   val i2I=Java.toInt64 o L o Java.fromInt
+   val i2w8=Prim.toWord8 o ll8 o Java.fromInt
+
+   val i2w=Java.toWord o Java.fromInt
+   val i2W=Java.toWord64 o L o Java.fromInt (* not used for negative integers *)
+   val I2W=Java.toWord64 o Java.fromInt64
+   val w2i=Java.toInt o Java.fromWord
+   val w2W=Java.toWord64 o LX o Java.fromWord
+   val w82W=Java.toWord64 o LX8 o Prim.fromWord8
+   val W2i=Java.toInt o l o Java.fromWord64
+   val W2I=Java.toInt64 o Java.fromWord64    
+   val W2w8=Prim.toWord8 o l8 o Java.fromWord64
+   val W2w=Java.toWord o l o Java.fromWord64
+
+   fun Ushr(x:word64,i:word)=
+      Java.toWord64(Prim.ushr(Java.fromWord64 x,Java.fromWord i))
+
+   fun fromLargeWord(w:word64)=
+      BI{sign=POS,digits=if Prim.=(w,0w0) then [] else [w]}
+   
+   fun fromInt i=
+   (* at this time of night I prefer to write boring simpleminded code than
+      interesting elegant code *)
+      if Ui.<(i,0) 
+      then
+         BI{sign=NEG,digits=[I2W(UI.~(i2I i))]}
+      else 
+         fromLargeWord(i2W i)
+
+   fun fromWord w=fromLargeWord(w2W w)
+   fun fromWord8 w=fromLargeWord(w82W w)
+
+   fun toInt(BI{sign,digits})=
+   (case digits of
+      [] => 0
+   |  [digit] =>
+      if Prim.=(sign,POS)
+      then
+         if Ushr(digit,0w31)<>0w0
+         then 
+            raise Overflow
+         else
+            W2i digit
+      else
+         if Ushr(digit,0w31)<>0w0
+         then
+            if digit=0wx80000000
+            then 
+               ~0x80000000
+            else
+               raise Overflow
+         else
+            Ui.~(W2i digit)
+   |   _ => raise Overflow
+   )
+
+   fun toWord(BI{sign,digits})=
+   (case digits of
+      [] => 0w0
+   |  digit::rest =>
+      if sign=POS
+      then
+         W2w digit
+      else 
+         i2w(Ui.~(W2i digit))
+   )
+
+   fun toWord8(BI{sign,digits})=
+   (case digits of
+      [] => 0w0
+   |  digit::rest =>
+      if sign=POS
+      then
+         W2w8 digit
+      else
+         i2w8(Ui.~(W2i digit))
+   )
+
+   fun toFixedInt(BI{sign,digits})=
+   (case digits of
+      [] => 0
+   |  digit::rest =>
+   let
+      val idigit=W2I digit
+   in
+      if sign=POS
+      then
+         if UI.<(idigit,0) 
+         then
+            raise Overflow
+         else
+            idigit
+      else
+      let
+         val res=UI.~ idigit
+      in
+         if UI.>=(res,0)
+         then
+            raise Overflow
+         else
+            idigit
+      end
+   end
+   |  _ => raise Overflow
+   )
+
+   fun toLargeWord(BI{sign,digits})=
+   (case digits of
+      [] => 0w0
+   |  digit::rest =>
+      if sign=POS
+      then 
+         digit
+      else
+         I2W(UI.~(W2I digit))
+   )
+
+   fun fromFixedInt(i)=
+   if UI.>=(i,0)
+   then
+      fromLargeWord(I2W i)
+   else
+      BI{sign=NEG,digits=[I2W(UI.~ i)]}
+end            
+
+
+
+
+
+     
+
+
+
+

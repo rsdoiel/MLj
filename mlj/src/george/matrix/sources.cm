@@ -1,0 +1,7 @@
+Group is
+   ../sort/sources.cm
+   ../arrays/sources.cm
+   MATRIX.sig
+   ROWMAT.sig
+   RowMat.sml
+   Sparse.sml

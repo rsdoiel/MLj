@@ -1,0 +1,255 @@
+(*......................................................................*)
+(* MLj - a Standard ML to Java bytecode compiler                        *)
+(* Copyright (C) 1999 Persimmon IT Inc.                                 *)
+(*                                                                      *)
+(* This program is free software; you can redistribute it and/or        *)
+(* modify it under the terms of the GNU General Public License          *)
+(* as published by the Free Software Foundation; either version 2       *)
+(* of the License, or (at your option) any later version.               *)
+(*                                                                      *)
+(* This program is distributed in the hope that it will be useful,      *)
+(* but WITHOUT ANY WARRANTY; without even the implied warranty of       *)
+(* MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the        *)
+(* GNU General Public License for more details.                         *)
+(*                                                                      *)
+(* You should have received a copy of the GNU General Public License    *)
+(* along with this program; if not, write to the Free Software          *)
+(* Foundation, Inc., 59 Temple Place - Suite 330, Boston,               *)
+(* MA 02111-1307, USA.                                                  *)
+(*......................................................................*)
+
+(* IntInf contains the code for IntInfs.  It is adapted from
+   the New Jersey source for IntInf, which has been considerably
+   cleaned up and made to work for Word64s, or any words with
+   even size.  Also, the structures NumScan, NumFormat and
+   (the one which does the real work) BigNat are factored out. 
+   
+   See the COPYRIGHT file for copyright details.
+   *)
+structure IntInf:INT_INF =
+struct
+   open Bool
+   open General
+   open List
+   open Option
+
+   structure BN = BigNat
+
+   structure W=BN.W
+
+   datatype sign = datatype IntInfDatatype.sign
+   datatype int = datatype IntInfDatatype.int
+
+   val zero = BI{sign=POS, digits=BN.zero}
+   val one = BI{sign=POS, digits=BN.one}
+   val minus_one = BI{sign=NEG, digits=BN.one}
+   fun posi digits = BI{sign=POS, digits=digits}
+   fun negi digits = BI{sign=NEG, digits=digits}
+   fun zneg [] = zero
+   |   zneg digits = BI{sign=NEG, digits=digits}
+
+   val fromInt=IntInfConvert.fromInt
+   val toInt=IntInfConvert.toInt
+   val fromLarge=IntInfConvert.fromLargeInt
+   val toLarge=IntInfConvert.toLargeInt
+
+   fun negSign POS = NEG
+     | negSign NEG = POS
+
+   fun subtNat (m, []) = {sign=POS, digits=m} 
+   |   subtNat ([], n) = {sign=NEG, digits=n}
+   |   subtNat (m,n) =
+         ({sign=POS,digits = BN.subt(m,n)})
+            handle BN.Negative => ({sign=NEG,digits = BN.subt(n,m)})
+
+   val precision = NONE
+   val minInt = NONE
+   val maxInt = NONE
+
+   fun ~ (i as BI{digits=[], ...}) = i
+   |   ~ (BI{sign=POS, digits}) = BI{sign=NEG, digits=digits}
+   |   ~ (BI{sign=NEG, digits}) = BI{sign=POS, digits=digits}
+
+   fun op * (_,BI{digits=[], ...}) = zero
+   |   op * (BI{digits=[], ...},_) = zero
+   |   op * (BI{sign=POS, digits=d1}, BI{sign=NEG, digits=d2}) =
+      BI{sign=NEG,digits=BN.mult(d1,d2)}
+   |   op * (BI{sign=NEG, digits=d1}, BI{sign=POS, digits=d2}) =
+      BI{sign=NEG,digits=BN.mult(d1,d2)}
+   |   op * (BI{digits=d1,...}, BI{digits=d2,...}) =
+      BI{sign=POS,digits=BN.mult(d1,d2)}
+
+   fun op + (BI{digits=[], ...}, i2) = i2
+   |   op + (i1, BI{digits=[], ...}) = i1
+   |   op + (BI{sign=POS, digits=d1}, BI{sign=NEG, digits=d2}) =
+      BI(subtNat(d1, d2))
+   |   op + (BI{sign=NEG, digits=d1}, BI{sign=POS, digits=d2}) =
+      BI(subtNat(d2, d1))
+   | op + (BI{sign, digits=d1}, BI{digits=d2, ...}) =
+      BI{sign=sign, digits=BN.add(d1, d2)}
+
+   fun op - (i1, BI{digits=[], ...}) = i1
+   |   op - (BI{digits=[], ...}, BI{sign, digits}) =
+      BI{sign=negSign sign, digits=digits}
+   |   op - (BI{sign=POS, digits=d1}, BI{sign=POS, digits=d2}) =
+      BI(subtNat(d1, d2))
+   |   op - (BI{sign=NEG, digits=d1}, BI{sign=NEG, digits=d2}) =
+      BI(subtNat(d2, d1))
+   |   op - (BI{sign, digits=d1}, BI{digits=d2, ...}) =
+      BI{sign=sign, digits=BN.add(d1, d2)}
+
+   fun quotRem (BI{sign=POS,digits=m},BI{sign=POS,digits=n}) =
+      (case BN.divmod (m,n) of (q,r) => (posi q, posi r))
+   |   quotRem (BI{sign=POS,digits=m},BI{sign=NEG,digits=n}) =
+      (case BN.divmod (m,n) of (q,r) => (zneg q, posi r))
+   |   quotRem (BI{sign=NEG,digits=m},BI{sign=POS,digits=n}) =
+      (case BN.divmod (m,n) of (q,r) => (zneg q, zneg r))
+   |   quotRem (BI{sign=NEG,digits=m},BI{sign=NEG,digits=n}) =
+      (case BN.divmod (m,n) of (q,r) => (posi q, zneg r))
+
+   fun divMod (BI{sign=POS,digits=m},BI{sign=POS,digits=n}) =
+      (case BN.divmod (m,n) of (q,r) => (posi q, posi r))
+   |   divMod (BI{sign=POS,digits=[]},BI{sign=NEG,digits=n}) = (zero,zero)
+   |   divMod (BI{sign=POS,digits=m},BI{sign=NEG,digits=n}) = 
+      let
+         val (q,r) = BN.divmod (BN.subtOne m, n)
+      in 
+         (negi(BN.addOne q), zneg(BN.subtOne(BN.subt(n,r)))) 
+      end
+   |   divMod (BI{sign=NEG,digits=m},BI{sign=POS,digits=n}) = 
+      let
+         val (q,r) = BN.divmod (BN.subtOne m, n)
+      in 
+         (negi(BN.addOne q), posi(BN.subtOne(BN.subt(n,r)))) 
+      end
+   |   divMod (BI{sign=NEG,digits=m},BI{sign=NEG,digits=n}) =
+      (case BN.divmod (m,n) of (q,r) => (posi q, zneg r))
+
+   fun op div arg = #1(divMod arg)
+   fun op mod arg = #2(divMod arg)
+   fun quot arg = #1(quotRem arg)
+   fun rem arg = #2(quotRem arg)
+
+   fun compare (BI{sign=NEG,...},BI{sign=POS,...}) = LESS
+   |   compare (BI{sign=POS,...},BI{sign=NEG,...}) = GREATER
+   |   compare (BI{sign=POS,digits=d},BI{sign=POS,digits=d'}) = BN.cmp (d,d')
+   |   compare (BI{sign=NEG,digits=d},BI{sign=NEG,digits=d'}) = BN.cmp (d',d)
+
+   fun op < arg = case compare arg of LESS => true | _ => false
+   fun op > arg = case compare arg of GREATER => true | _ => false
+   fun op <= arg = case compare arg of GREATER => false | _ => true
+   fun op >= arg = case compare arg of LESS => false | _ => true
+
+   fun abs (BI{sign=NEG, digits}) = BI{sign=POS, digits=digits}
+   |   abs i = i
+
+   fun max arg = case compare arg of GREATER => #1 arg | _ => #2 arg
+   fun min arg = case compare arg of LESS => #1 arg | _ => #2 arg
+
+   fun sign (BI{sign=NEG,...}) = ~1
+   |   sign (BI{digits=[],...}) = 0
+   |   sign _ = 1
+
+   fun sameSign (i,j) = sign i = sign j
+
+   local
+      fun fmt' fmtFn i =
+         (case i of 
+            (BI{digits=[],...}) => "0"
+         |  (BI{sign=NEG,digits}) => String.^("~",fmtFn digits)
+         |  (BI{sign=POS,digits}) => fmtFn digits
+         )
+   in
+      fun fmt StringCvt.BIN = fmt' (BN.fmt2)
+      |   fmt StringCvt.OCT = fmt' (BN.fmt8)
+      |   fmt StringCvt.DEC = fmt' (BN.fmt10)
+      |   fmt StringCvt.HEX = fmt' (BN.fmt16)
+   end
+
+   val toString = fmt StringCvt.DEC
+
+   local
+      fun scan' scanFn getc cs = 
+      let
+         val cs' = StringCvt.skipWS getc cs
+         fun cvt (NONE,_) = NONE
+         |   cvt (SOME(i,cs),wr) = SOME(wr i, cs)
+      in
+         (case (getc cs') of 
+            (SOME(#"~", cs'')) => cvt(scanFn getc cs'',zneg)
+         |  (SOME(#"-", cs'')) => cvt(scanFn getc cs'',zneg)
+         |  (SOME(#"+", cs'')) => cvt(scanFn getc cs'',posi)
+         |  (SOME _) => cvt(scanFn getc cs',posi)
+         |  NONE => NONE
+              (* end case *)
+         )
+      end
+
+   in
+      fun scan StringCvt.BIN getc cs = scan' (BN.scan2) getc cs
+      |   scan StringCvt.OCT getc cs = scan' (BN.scan8) getc cs
+      |   scan StringCvt.DEC getc cs = scan' (BN.scan10) getc cs
+      |   scan StringCvt.HEX getc cs = scan' (BN.scan16) getc 
+          (MLJUtils.String.trim0x getc cs)
+   end
+
+   fun fromString s = StringCvt.scanString (scan StringCvt.DEC) s
+
+   fun pow (_, 0) = one
+   |   pow (BI{sign=POS,digits}, n) = posi(BN.exp(digits,n))
+   |   pow (BI{sign=NEG,digits}, n) = 
+      if Int.mod (n, 2) = 0
+      then posi(BN.exp(digits,n))
+      else zneg(BN.exp(digits,n))
+
+   fun log2 (BI{sign=POS,digits}) = Word.toInt(BN.log2 digits)
+     | log2 _ = raise General.Domain (* also raised by BigNat for 0 *)
+
+
+   (* We now write code for logical operations *)
+   fun notb x= ~(x+one)
+
+   local
+      val land=BN.andb
+      val landnot=BN.andnotb
+      val lor=BN.orb
+      val lxor=BN.xorb
+      val sub1=BN.subtOne
+      val add1=BN.addOne
+   in
+      fun andb(BI{sign=s1,digits=d1},BI{sign=s2,digits=d2})=
+      (case (s1,s2) of
+         (POS,POS) => BI{sign=POS,digits=land(d1,d2)}
+      |  (POS,NEG) => BI{sign=POS,digits=landnot(d1,sub1 d2)}
+      |  (NEG,POS) => BI{sign=POS,digits=landnot(d2,sub1 d1)}
+      |  (NEG,NEG) => BI{sign=NEG,digits=add1(lor(sub1 d1,sub1 d2))}
+      )
+
+      fun orb(BI{sign=s1,digits=d1},BI{sign=s2,digits=d2})=
+      (case (s1,s2) of
+         (POS,POS) => BI{sign=POS,digits=lor(d1,d2)}
+      |  (POS,NEG) => BI{sign=NEG,digits=add1(landnot(sub1 d2,d1))}
+      |  (NEG,POS) => BI{sign=NEG,digits=add1(landnot(sub1 d1,d2))}
+      |  (NEG,NEG) => BI{sign=NEG,digits=add1(land(sub1 d1,sub1 d2))}
+      )
+
+      fun xorb(BI{sign=s1,digits=d1},BI{sign=s2,digits=d2})=
+      (case (s1,s2) of
+         (POS,POS) => BI{sign=POS,digits=lxor(d1,d2)}
+      |  (POS,NEG) => BI{sign=NEG,digits=add1(lxor(d1,sub1 d2))}
+      |  (NEG,POS) => BI{sign=NEG,digits=add1(lxor(sub1 d1,d2))}
+      |  (NEG,NEG) => BI{sign=POS,digits=lxor(sub1 d1,sub1 d2)}
+      )
+
+      fun <<(BI{sign,digits},n)=
+         BI{sign=sign,digits=BN.<<(digits,n)}
+
+      fun ~>>(BI{sign,digits},n)=
+      (case sign of
+         POS => BI{sign=POS,digits=BN.>>(digits,n)}
+      |  NEG => BI{sign=NEG,digits=add1(BN.>>(sub1 digits,n))}
+      )
+   end
+end (* structure IntInf *)
+
+

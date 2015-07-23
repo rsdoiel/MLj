@@ -1,0 +1,212 @@
+(*......................................................................*)
+(* Catch an exception					       24/11/97	*)
+(*......................................................................*)
+| Catch (try, ([v], catch)) => 
+  let
+(*......................................................................*)
+(* Catch any exception						3/9/97	*)
+(*......................................................................*)
+    fun compileCatch () = 
+    let
+      val exnvalue = newHandle ()
+      val env' = (Var.Map.insert(tyenv, v, 
+                   (Local exnvalue, MILTy.exn)), kindenv)
+    in
+      bind (compileCont E catch env' handlers doexit) 
+        (fn (catchty, catchfvs, catchinstrs, catchexit) =>
+      let
+        val catchfvs' = delete(catchfvs, v)
+      in
+        bind (makeArgs (DE, tyenv, handlers) catchfvs) (fn catchargs =>
+        let
+          val catchblock = ref (SOME(newCatchBlock((exnvalue, JavaRepOps.exn), 
+            catchargs, catchinstrs, catchexit, #1 handlers)))
+          val handlers' = ((exn, (catchblock, map #1 catchargs)) 
+            :: #1 handlers, Var.Set.union(catchfvs', #2 handlers))
+        in
+          bind (compileCont E try (tyenv, kindenv) handlers' doexit)
+            (fn (tryty, tryfvs, tryinstrs, tryexit) =>
+          bind (makeArgs (DE, tyenv, handlers') 
+               (Var.Set.union(tryfvs, catchfvs'))) (fn tryargs=>
+          unit  
+          (               
+            catchty,
+            Var.Set.union(tryfvs, catchfvs'),
+            [],
+            goto (ref (SOME (newBlock 6
+              (tryargs, tryinstrs, tryexit, #1 handlers'))), map #1 tryargs)
+          )))
+        end)
+      end)
+    end
+  in
+  case catch of
+(*......................................................................*)
+(* Catch a specific static Java exception			3/9/97	*)
+(*......................................................................*) 
+  CaseExCon(Var v', [(excon, (vs, body))], SOME (Throw(Var v'', _))) =>
+  if Var.eq(v,v') andalso Var.eq(v',v'')
+  then
+    bind (exConInfo E excon) (fn (argtys, exnrep) =>
+    let
+      val exnvalue = newHandle ()
+      val argvalues = map (fn _ => newHandle ()) argtys
+      val triples = ListPair.zip(vs, ListPair.zip(argvalues, argtys))
+      val tyenv' = foldl (fn ((var, (value, ty)), tyenv) =>
+        Var.Map.insert(tyenv, var, (Local value, ty))) tyenv triples
+      val tyenv' = Var.Map.insert(tyenv', v, 
+        (Local exnvalue, MILTy.exn))
+      val env' = (tyenv', kindenv)
+    in
+      bind (compileCont E body env' handlers doexit) 
+        (fn (bodyty, bodyfvs, bodyinstrs, bodyexit) =>
+      let
+        val catchfvs = remove(bodyfvs, v::vs)
+      in
+        bind (makeArgs (DE, tyenv, handlers) (Var.Set.add(catchfvs,v))) 
+          (fn catchargs =>
+        bind (MOps.map (tyToRep DE) argtys) (fn argreps =>
+        let
+          val catchinstrs = 
+            Gen.mapi (fn (i, typedarg) =>
+                getfield((exnvalue, exnrep), argLabel i, true, typedarg))
+              (ListPair.zip(argvalues, argreps)) @ bodyinstrs
+          val catchblock = ref (SOME (newCatchBlock((exnvalue, exnrep), 
+            catchargs, catchinstrs, bodyexit, #1 handlers)))
+          val handlers' = ((exnrep, (catchblock, map #1 catchargs)) 
+            :: #1 handlers, Var.Set.union(catchfvs, #2 handlers))
+        in
+          bind (compileCont E try env handlers' doexit)
+            (fn (tryty, tryfvs, tryinstrs, tryexit) =>
+          bind (makeArgs (DE, tyenv, handlers') 
+               (Var.Set.union(catchfvs, tryfvs))) (fn tryargs =>
+          unit  
+          (               
+            bodyty,
+            Var.Set.union(catchfvs, tryfvs),
+            [],
+            goto (ref (SOME (newBlock 7
+              (tryargs, tryinstrs, tryexit, #1 handlers'))), map #1 tryargs)
+          )))
+        end))
+      end)  
+    end)
+  else compileCatch ()
+| _ => compileCatch ()
+  end
+
+
+
+
+(*
+(*......................................................................*)
+(* Case on exceptions						23/9/97	*)
+(*......................................................................*)
+| CaseExCon(ve, cases, default) =>
+  bind (compileVal ve env) (fn (vety, vefvs, veinstrs, vevalue) =>
+  let
+    val formalvalue = newHandle ()
+
+  (*..................................................................*)
+  (* For each case, we must cast the general exception class down     *)
+  (* to the appropriate subclass, then extract the argument fields.   *)
+  (* One exception: when the argument to the exception is a string,   *)
+  (* it's stored as Java's own Throwable message so we just invoke    *)
+  (* getMessage on it.                                                *)
+  (*..................................................................*)
+    fun compCase (NONE, ([],ce)) = 
+        compileCont ce env doexit
+
+      | compCase (SOME exname, (vs, ce)) =
+        bind (getExConArgs (tyenv,exname, formalvalue, vs, false)) 
+          (fn (tyenv', exnrep, instrs1) =>
+        bind (compileCont ce (tyenv', kindenv) doexit) 
+          (fn (cty, fvs, instrs2, exit) =>
+        unit 
+        (
+          cty, 
+          remove (fvs, vs),
+          instrs1 @ instrs2,
+          exit
+        )))
+  in    
+    bind (compileCases compCase (cases,default)) 
+      (fn (cty, fvs, cases, default) =>
+    bind (tyToRep B vety) (fn verep =>
+    let
+      val (deffvs, definstrs, defexit) = #2 default
+      val intvalue = newHandle ()
+      fun make vevalue [] = 
+          unit (deffvs, definstrs, defexit)
+
+        | make vevalue ((exname, (fvs, instrs, exit))::rest) =
+          bind (exnInfo B exname) (fn (_, exnrep) =>
+          bind (makeBranch (SOME (formalvalue, vevalue, verep), 
+            (fvs, instrs, exit))) (fn thenlabel =>
+          bind (make formalvalue rest) (fn (restfvs, restinstrs, restexit) =>
+          bind (makeBranch (SOME (formalvalue, vevalue, verep),
+            (restfvs, restinstrs, restexit))) (fn elselabel =>
+          unit 
+          ( 
+            Var.Set.union(restfvs, fvs), 
+            [instr(Blocks.instanceof (toJava exnrep),[vevalue],[intvalue])],
+            cond (Tests.ne, intvalue, constInt 0, thenlabel, elselabel)
+          )))))
+    in
+      bind (make vevalue cases) (fn (fvs, instrs, exit) =>
+      unit
+      (
+        cty,
+        Var.Set.union(vefvs, fvs),
+        veinstrs @ instrs,
+        exit
+      ))
+    end))
+  end)
+*)
+
+
+
+(*
+(*......................................................................*)
+(* Compile code to extract exception arguments				*)
+(*......................................................................*)
+  fun getExConArgs (tyenv,exname,formalvalue,vs,alreadycast) =
+  bind (exnInfo B exname) (fn (tys, exnrep) =>
+  let          
+    val strrep = JavaRep.Java (Types.CLASS ClassHandle.string)
+    val throwrep = JavaRepOps.class "java/lang/Throwable"
+    val exnvalue = newHandle ()
+    val singlearg = length vs = 1
+    fun processArgs (i, [], [], tyenv, instrs) = 
+        unit (tyenv, exnrep, if null instrs orelse alreadycast then instrs
+              else checkcast(formalvalue, (exnvalue, exnrep))::instrs)
+
+      | processArgs (i, v::vs, ty::tys, tyenv, instrs) =
+        case Var.Map.find(c, v) of
+          SOME(0,0) =>
+          processArgs (i+1, vs, tys, tyenv, instrs)
+
+        | _ => 
+          let
+            val value = newHandle ()
+            val tyenv = Var.Map.insert(tyenv, v, (Local value, ty))
+          in
+            bind (tyToRep B ty) (fn rep =>
+            if singlearg andalso JavaRepOps.eq (rep, strrep) 
+            then unit (tyenv, exnrep,
+              [invokevirtual("getMessage", [(formalvalue, throwrep)], 
+                                           [(value,rep)])])
+            else
+            let 
+              val instr = 
+                getfield((exnvalue,exnrep),argLabel i,true,(value,rep))
+            in
+              processArgs (i+1, vs, tys, tyenv, instr::instrs)
+            end)
+          end
+  in
+    processArgs (0, vs, tys, tyenv, [])
+  end)
+*)
+

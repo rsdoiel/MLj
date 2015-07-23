@@ -1,0 +1,29 @@
+INSTALLING MLJ 0.2
+------------------
+
+These instructions are the absolute minimum for setting up MLJ. For
+more details see the MLJ User Guide in mlj/doc/mlj.dvi.
+
+In your user profile make the following changes:
+
+(1) Set MLJBIN to the absolute path name of the directory mlj/bin 
+that (will) contain the executables.
+
+(2) Extend your PATH with this directory.
+
+(3) Set BOOTCLASSPATH to a path in which the Java system classes live.
+For Sun's JDK prior to version 1.2, these are collected together in a single
+file called classes.zip in a directory called lib. For JDK 1.2, they probably
+live in a file rt.jar in a directory jre/lib. For Microsoft's SDK you may need
+to use the CLSPACK utility program to create a classes.zip file.
+
+(4) If you downloaded the pre-built binaries, that's it! Otherwise, you must
+have a copy of SML/NJ installed (for Windows, invoked by sml-cm; for Unix 
+systems, simply by sml) with the CM_PATH environment variable set properly
+(e.g. to /sml/lib). In the directory mlj type 
+
+  build
+
+Assuming everything works as expected, an SML/NJ image file should be stored 
+in mlj/bin, and the SML/NJ runtime copied across so that upgrades to your 
+SML/NJ installation don't disrupt MLJ.

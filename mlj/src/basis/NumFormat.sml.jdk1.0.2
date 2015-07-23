@@ -1,0 +1,117 @@
+(*......................................................................*)
+(* MLj - a Standard ML to Java bytecode compiler                        *)
+(* Copyright (C) 1999 Persimmon IT Inc.                                 *)
+(*                                                                      *)
+(* This program is free software; you can redistribute it and/or        *)
+(* modify it under the terms of the GNU General Public License          *)
+(* as published by the Free Software Foundation; either version 2       *)
+(* of the License, or (at your option) any later version.               *)
+(*                                                                      *)
+(* This program is distributed in the hope that it will be useful,      *)
+(* but WITHOUT ANY WARRANTY; without even the implied warranty of       *)
+(* MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the        *)
+(* GNU General Public License for more details.                         *)
+(*                                                                      *)
+(* You should have received a copy of the GNU General Public License    *)
+(* along with this program; if not, write to the Free Software          *)
+(* Foundation, Inc., 59 Temple Place - Suite 330, Boston,               *)
+(* MA 02111-1307, USA.                                                  *)
+(*......................................................................*)
+
+(* NumFormat:NUMFORMAT is a structure which represents single W.word's in a 
+   variety of radices.
+   *)
+structure NumFormat:>NUMFORMAT=
+struct
+   open List
+   open Option
+   open General
+
+   structure W = IntInfWordUtils.W
+   
+   type word=W.word
+
+   fun mkDigit (w : W.word) =
+     CharVector.sub("0123456789ABCDEF", W.toInt w)
+   
+   val zero=W.fromInt 0
+   val seven=W.fromInt 7
+   val ten=W.fromInt 10
+   val fifteen=W.fromInt 15
+
+   (* wordtoX convert words to list of characters, most significant last *)
+   fun wordToBin w =
+   if w=zero 
+   then 
+      [#"0"]
+   else 
+   let
+      fun mkBit w = if (W.andb(w, 0w1)=zero) then #"0" else #"1"
+      fun f (w,l) = 
+         if w=zero 
+         then 
+            l
+         else
+            f(W.>>(w,0w1),(mkBit w)::l)
+   in
+      f(w,[])
+   end
+
+   fun wordToOct w=
+   if w=zero
+   then 
+      [#"0"]
+   else
+   let
+      fun mkDig w = mkDigit(W.andb(w,0w7))
+      fun f(w,l)=
+         if w=zero
+         then
+            l
+         else
+            f(W.>>(w,0w3),mkDig w::l)
+   in
+      f(w,[])
+   end
+  
+   fun wordToDec w=
+   if w=zero
+   then
+      [#"0"]
+   else
+   let
+      fun mkDig w =mkDigit(W.mod(w,ten))
+      fun f(w,l)=
+         if w=zero
+         then
+            l
+         else
+            f(W.div(w,ten),mkDig w::l)
+   in
+      f(w,[])
+   end
+
+   fun wordToHex w=
+   if w=zero
+   then
+      [#"0"]
+   else
+   let
+      fun mkDig w=mkDigit(W.andb(w,fifteen))
+      fun f(w,l)=
+         if w=zero 
+         then
+            l
+         else
+            f(W.>>(w,0w4),mkDig w::l)
+   in
+      f(w,[])
+   end
+
+   fun fmtW StringCvt.BIN = wordToBin
+   |   fmtW StringCvt.OCT = wordToOct
+   |   fmtW StringCvt.DEC = wordToDec
+   |   fmtW StringCvt.HEX = wordToHex
+   
+   fun fmtWord radix = String.implode o (fmtW radix)
+end

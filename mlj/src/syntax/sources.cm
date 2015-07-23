@@ -1,0 +1,61 @@
+Group 
+   structure Parse (* What you call *)
+   signature PARSE
+
+   structure Syntax (* Syntax tree *)
+   structure SCon (* Format of constants *)
+   structure Error (* Framework for error messages *)
+   signature ERROR
+
+   structure Java (* Java ops *)
+   structure JavaFlags (* Type of java modifiers *)
+
+   structure Position (* Position type *)
+   signature POSITION   
+
+   structure PrintLoc (* For printing positions and locations *)
+   signature PRINTLOC
+
+   structure SourceMap (* For decoding positions and locations *)
+   signature SOURCE_MAP
+is
+   smlnj-lib.cm
+   ml-yacc-lib.cm (* ML-Yacc library *)
+   ../common/sources.cm (* Used for SCons *)
+   ../george/backend/sources.cm (* Used for method/field/class modifiers *)
+   
+   Parse.sml
+   PARSE.sig
+
+   Syntax.sml (* the AST *)
+   Java.sml (* Used for types of Java ops *)
+
+   TokenTable.sml (* Translates reserved words *)
+   TOKENTABLE.sig
+
+   SourceMap.sml (* Compresses line/col data into a character count *)
+   SOURCE_MAP.sig
+
+   SCon.sml (* Type for constants *)
+
+   DynIntArray.sml (* Lightweight integer arrays *)
+
+   ERROR.sig (* Error handling *)
+   Error.sml 
+
+   LEXSTATE.sig (* File state for the lexer *)
+   LexState.sml
+
+   JavaFlags.sml
+
+   mlj.grm
+   mlj.lex
+
+   Join.sml
+ 
+   POSITION.sig
+   Position.sml
+
+   PRINTLOC.sig
+   PrintLoc.sml
+ 

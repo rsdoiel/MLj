@@ -1,0 +1,20 @@
+Library
+   structure Zip
+   signature ZIP
+is
+   smlnj-lib.cm
+
+   ZIP.sig
+   Zip.sml
+
+   CRC.sig
+   CRC.sml
+
+   LITTLEEND.sig
+   LittleEnd.sml
+  
+   DOSTIME.sig
+   DosTime.sml
+
+   BASICBINI.sig
+   BasicBinI.sml

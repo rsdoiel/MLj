@@ -1,0 +1,4 @@
+on microsoftbug
+sourcepath . ../conc
+export AQueensApplet.Queens Queens 
+make

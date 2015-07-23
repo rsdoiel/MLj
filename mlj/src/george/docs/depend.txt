@@ -1,0 +1,120 @@
+[ last revised 26th June 1997 ]
+This file documents how dependencies are computed for basic block code.
+That is to say, it documents how we decide, for operations A and B, whether
+A must be performed before B.  (We write this A<B).
+
+The operations as handed to the basic block code are a list of operations
+constructed by the functions in BLOCKS.sig, together with an exit.  In
+constructing the dependencies, we replace the exit by a fictitious "vale"
+operation.  If the exit is a throw or return, the arguments to the vale
+instruction are the thing thrown or returned; if it's a goto or conditional
+jump the arguments are the union of the parameters to the blocks which can
+be jumped to and the arguments if any to the vale itself; eg for a comparison
+the two things being compared.  If an operation is not < the vale instruction
+it will not be performed at all (this means some dead code elimination).
+
+"must be performed before" is a partial ordering, and we only need to explain
+arrows in this p.o. which are not obtained by transitivity from other arrows.
+We call such arrows "primitive".
+
+There are 4 types of primitive arrows.
+1) If A is used as an argument for B.  This is implicit in the basic block
+   code, and we won't mention this further.
+2) If A could raise an exception (terminating the execution of the
+   basic block) and B either could raise an exception or could store to
+   memory.
+3) If A is a store instruction to memory, and B is a load or store
+   instruction which may be to the same area of memory.
+4) If A is an invoke_special of an init method on Arg 0 and B is any operation using
+   Arg 0. 
+A load is a getfield or getstatic or array load; a store is a putfield or
+putstatic or array store.
+We compute "which may be to the same area of
+memory" using the type-based arguments of an earlier e-mail (stored
+in /rnd/george/mlj/george/bbc/compatible.txt) and call two such
+load/stores "compatible".  The definition of "compatible" may be
+refined later.  Note that in particular we assume two load/stores refer
+to different locations of memory if the access flags (MUSTDO/OPTIONAL
+and MUTABLE/IMMUTABLE) are different.  This is a restriction on the user of
+the basic block code; the reason for it is that (apart from the increased
+ability to tell different locations apart) I was not able to work out
+reasonably simple rules for handling dependency arrows between loads/stores
+with different access flags.  Nevertheless, it is a restriction which may
+be a nuisance in the future; particularly with tail recursion.  For example,
+consider the function unary_plus defined as follows:
+fun unary_plus(x,0)=x
+|   unary_plus(x,y)=unary_plus(x+1,y-1)
+If the method corresponding to unary_plus takes and returns a class
+containing a pair of integers, it is probably best for it not to allocate
+new space for (x+1,y-1) each time round the recursion, but to clobber that
+used for the previous recursion (though the outermost level of recursion
+still probably can't avoid doing a new as (x,y) may be referenced elsewhere).
+To allow such clobbering, the fields of the pair have to be mutable, but
+(not in this case, but in other slightly more complicated ones) it will
+be more convenient for the rest of the body of the function to treat the
+fields as immutable.  I have to admit that I don't know how to resolve
+this satisfactorily; presumably it's necessary to allow the basic block code
+to be extended in some way.  I suggest that it is best to avoid thinking of
+the access flags as extensions to Java's type systems, but instead just as
+a way of controlling whether operations must be done and the order they must
+be done in.
+
+We class the following operations as able to raise exceptions:
+1) all function calls.
+2) all operations marked as MUSTDO.  Operations which can
+   be marked as MUSTDO are divisions/remainders,
+   loads/stores, checkcast, newarray, and arraylength.
+
+   Operations should be marked as OPTIONAL rather than MUSTDO if
+   possible.  This can be done as follows, assuming we are not going
+   to have any linking errors:
+
+   divisions and remainders can always be OPTIONAL if the types involved
+      are double or float, or can be OPTIONAL if the divisor can be
+      guaranteed non-zero.
+   getstatic and putstatic can always be OPTIONAL.
+   getfield and putfield can be OPTIONAL if the object read from/written
+      to can be guaranteed not to be NULL.
+   array loads/stored can be OPTIONAL if the array in question can be
+      guaranteed to be allocated, the index is within the bounds of the
+      array, and (for store) we don't have casting problems with
+      writing to the array.
+   checkcast can be OPTIONAL if the cast can be guaranteed to succeed.
+   newarray can be OPTIONAL if the array dimensions can be guaranteed to
+      be non-negative
+   arraylength can be OPTIONAL if the array object is not NULL.
+
+Dependency relations for operations able to throw exceptions: let
+x_1 .. x_n be the operations in the block able to throw exceptions, and
+let v be the vale operation, then we force x_1< . . <x_n<v, so that
+the operations are all done, in the order supplied.
+
+Dependency relations for load/stores.  If L is a MUTABLE load, S1 is the
+last compatible store, and S2 is the next compatible store, F1 is the last
+function call, if any, and F2 is the next function call, if any,
+we force S1,F1<L<S2,F2.
+
+For IMMUTABLE loads, we force S1,F1<L (but not L<S2,F2).
+
+If S is a MUTABLE store, LS1 is the last compatible load or store, LS2 is
+the next compatible load or store, E1 is the last operation able to throw an
+exception, if any, E2 is the next operation able to throw an exception, or
+else the vale instruction, then we force LS1,E1<S<LS2,E2.
+
+If S is an IMMUTABLE store, L is the next compatible load, E is the next
+operation able to throw an exception, or else the vale instruction, then
+we force S<L,E.
+
+To spot type (4), if A is a call to an initialisation method on Arg 0, and U is
+an (IMMUTABLE OPTIONAL) (putfield or putstatic) operation, or an (OPTIONAL) (checkcast or 
+monitorenter or monitorexit), or an (instanceof) on that same value, we force A<U.
+We can narrow the class of operations down because many operations are not legal on 
+values created using new, while of those remaining we can ignore ones which
+would not be moved before a function call because they might raise an exception (COMPULSORY) or
+are MUTABLE or are loads, or because they are themselves a function call.
+
+
+
+
+
+

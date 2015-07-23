@@ -1,0 +1,42 @@
+<!DOCTYPE HTML PUBLIC "-//IETF//DTD HTML//EN">
+<html>
+  <head>
+    <title>Eight Queens Demo</title>
+  </head>
+
+   <body bgcolor="#ffffff">
+<center>
+<h1>Eight Queens Example</h1>
+</center>
+<HR>
+A standard introductory programming exercise, given a new look.
+<center>
+<applet archive="AQueensApplet.zip" code="Queens.class" width=420 height=420>
+<p><i>Applet should appear here but you don't have Java enabled in your browser.</i><p>
+</applet>
+</center>
+<h3>The code</h3>
+The code for this example is partially taken from <A href="http://www.cl.cam.ac.uk/users/lcp">Larry Paulson</a>'s book <A HREF="http://www.cl.cam.ac.uk/users/lcp/MLbook/"><I>ML 
+for the Working Programmer</I></A> (Second Edition), published by Cambridge University Press, 1996. Those parts are subject to the following <a href="LICENCE-CUP">copyright notice and disclaimer of warranty</a>. <p>
+
+The structure <A href="AQueens.sml">AQueens</a> computes a circular lazy stream of solutions to the problem using a general depth-first search. For each adjacent pair of solutions, another search enumerates the legal ways of moving the queens from one solution to the next and picks an `interesting' one (in this case, the one with the most diagonal moves, but that's easily tweaked).
+<p>
+The second part of the applet is the structure <a
+href="AQueensApplet.sml">AQueensApplet</a> which declares the applet
+and sets up a concurrent thread which actually does the
+animation. This is fairly imperative code and makes heavy use of MLj's
+Java extensions -- it was based on an MLj
+transcription of some code from <a href="http://www.oreilly.com/catalog/javanut2/">Java in a Nutshell</a> by David Flanagan.
+
+<p>
+<hr>
+<table width="100%">
+<tr>
+<td align=left><a href="../../index.html">MLj home</a></td>
+<td align=right>Comments to:
+<a href="mailto:mlj@dcs.ed.ac.uk">mlj@dcs.ed.ac.uk</a></td></tr>
+</table>
+
+
+  </body>
+</html>

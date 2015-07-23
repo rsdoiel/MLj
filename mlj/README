@@ -1,0 +1,19 @@
+MLJ 0.2
+-------
+
+This directory contains the distribution for MLJ 0.2. In particular:
+
+INSTALL    	contains minimum instructions for installation.
+COPYING    	is the Gnu Public License under which MLJ 0.2 is distributed
+index.html 	is the root of the HTML documentation.
+
+doc/		contains documentation, in particular:
+  mlj.dvi,mlj.ps        contain the MLJ User Guide.
+  mljext.dvi,mljext.ps  document the MLJ Language Extensions.
+
+src/		contains the source for the compiler and Basis Library
+demos/		contains a number of demonstration programs
+bin/		contains the MLJ binaries, when built
+
+
+
