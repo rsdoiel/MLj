@@ -88,3 +88,4 @@ This makes me think I am still missing something in my compiler compile.
 + [Release of version 0.4 of the ULTRA type error slicer for SML](http://blog.gmane.org/gmane.comp.lang.sml.smlnj/month=20091101)
 + [Standard ML of New Jersey](http://sourceforge.net/p/smlnj/mailman/message/24057855/)
 + [Notes on Programming Standard ML of New Jersey](http://www.cs.cornell.edu/riccardo/prog-smlnj/notes-011001.pdf) <-- this is a PDF
++ [Nick Benton's page on MLj](http://research.microsoft.com/en-us/um/people/nick/mlj.htm)
