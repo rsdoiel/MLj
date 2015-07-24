@@ -79,3 +79,12 @@ Trying to run @$MLJBIN/run.x86-darwin helloworld.sml@ fails with
 ```
 
 This makes me think I am still missing something in my compiler compile.
+
+### Notes to follow up on problem
+
++ [Re: Problems porting from old Compilation Manager](http://comments.gmane.org/gmane.comp.lang.sml.smlnj/657) <-- looks most promising
+    + This link to the tar.gz file is broken (not surprising given it is from 2009)
++ [Building MLj - The University of Edinburgh](http://www.dcs.ed.ac.uk/home/mlj/mailarc/msg00002.html)
++ [Release of version 0.4 of the ULTRA type error slicer for SML](http://blog.gmane.org/gmane.comp.lang.sml.smlnj/month=20091101)
++ [Standard ML of New Jersey](http://sourceforge.net/p/smlnj/mailman/message/24057855/)
++ [Notes on Programming Standard ML of New Jersey](http://www.cs.cornell.edu/riccardo/prog-smlnj/notes-011001.pdf) <-- this is a PDF
