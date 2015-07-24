@@ -72,7 +72,7 @@ Create a helloworld.sml file.
     print "Hello World!\n";
 ```
 
-Trying to run @$MLJBIN/run.x86-darwin helloworld.sml@ fails with
+Trying to run `$MLJBIN/run.x86-darwin helloworld.sml` fails with
 
 ```
     run.x86-darwin: Fatal error -- no in-core heap image found
